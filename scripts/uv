@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# 项目内 uv 包装：Python 解释器装在 tools/python，避免写入用户目录
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export UV_PYTHON_INSTALL_DIR="$ROOT/tools/python"
+export UV_PYTHON_PREFERENCE="only-managed"
+export UV_PYTHON_BIN_DIR="$ROOT/tools/python/bin"
+export UV_PYTHON_INSTALL_BIN=0
+exec "$ROOT/tools/uv/uv.exe" "$@"

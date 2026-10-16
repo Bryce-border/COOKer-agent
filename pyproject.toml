@@ -1,0 +1,49 @@
+[project]
+name = "cooker"
+version = "0.1.0"
+description = "COOKer：基于 HowToCook 菜谱库的本地做饭助手 Agent"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
+    "langchain-core>=1.0",
+    "langchain-openai>=1.0",
+    "langchain-qwq>=0.3",
+    "langchain-deepseek>=1.0",
+    "httpx>=0.27",
+    "numpy>=2.0",
+    "jieba>=0.42",
+    "rank-bm25>=0.2.2",
+    "fastmcp>=2.12",
+    "langgraph>=1.0",
+    "langgraph-checkpoint-sqlite>=3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "langgraph-cli[inmem]>=0.4",
+]
+
+[project.scripts]
+cooker-ingest = "cooker.ingest.pipeline:main"
+cooker-index = "cooker.retrieval.indexer:main"
+cooker-mcp = "cooker.mcp_server.server:main"
+cooker-chat = "cooker.agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cooker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: 需要真实调用 LLM API 的测试（默认跳过，用 -m live 运行）",
+]
+addopts = "-m 'not live'"
+asyncio_mode = "auto"

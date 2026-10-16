@@ -1,0 +1,58 @@
+# 模型配置：代码里只引用「角色」，不写死模型 ID。
+# 换模型 / 换厂商 / 换接入地址都只改这个文件。
+
+# 默认厂商（可被环境变量 COOKER_PROVIDER 覆盖）
+default_provider: qwen
+# 主厂商调用失败时自动切换到的备用厂商（留空则不启用）
+fallback_provider: deepseek
+
+# 接入地址：一个地址可以托管多个厂商的模型
+endpoints:
+  bailian:                 # 阿里云百炼，同时托管 Qwen 与 DeepSeek
+    base_url_env: DASHSCOPE_BASE_URL
+    api_key_env: DASHSCOPE_API_KEY
+    thinking_switch: enable_thinking   # 百炼用 extra_body.enable_thinking 开关思考模式
+  deepseek_official:       # DeepSeek 官方 API
+    base_url_env: DEEPSEEK_BASE_URL
+    api_key_env: DEEPSEEK_API_KEY
+    thinking_switch: null              # 未验证官方 API 的开关参数，暂不发送
+
+providers:
+  qwen:
+    adapter: qwen          # langchain-qwq.ChatQwen
+    endpoint: bailian
+    roles:
+      agent: qwen3.7-plus  # 主对话 + 工具调用（评测见 TD-19）
+      router: qwen-flash   # 意图识别：快、便宜
+      planner: qwen-max    # 一周菜单等复杂规划
+      extract: qwen-flash  # 离线批量结构化抽取
+  deepseek:
+    adapter: deepseek      # langchain-deepseek.ChatDeepSeek（正确处理 reasoning_content）
+    endpoint: bailian      # 改为 deepseek_official 即走官方 API
+    roles:
+      agent: deepseek-v4.1-flash
+      router: deepseek-v4.1-flash
+      planner: deepseek-v4-pro
+      extract: deepseek-v4.1-flash
+
+# 各角色的通用调用参数（与厂商无关）
+role_options:
+  agent:   {temperature: 0.3, thinking: false, timeout: 60, max_retries: 2}
+  router:  {temperature: 0.0, thinking: false, timeout: 20, max_retries: 2}
+  planner: {temperature: 0.5, thinking: false, timeout: 120, max_retries: 2}
+  extract: {temperature: 0.0, thinking: false, timeout: 90, max_retries: 3}
+
+# 向量与重排：固定使用百炼，不随 default_provider 切换。
+# 换 embedding 模型或维度会导致索引失效，需要重新运行 cooker-index。
+embedding:
+  endpoint: bailian
+  model: qwen3.7-text-embedding
+  dimensions: 1024
+  batch_size: 20          # 实测百炼单次最多 20 条
+  timeout: 30
+rerank:
+  endpoint: bailian
+  model: qwen3.7-text-rerank
+  # 重排接口不在 compatible-mode/v1 下：取 base_url 中 /compatible-mode 之前的部分拼接此路径
+  path: /compatible-api/v1/reranks
+  timeout: 20

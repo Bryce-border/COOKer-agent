@@ -1,0 +1,39 @@
+# 检索评测集：query → 可接受的答案（命中任意一个即算对）
+# 分四类，考察不同检索能力。由开发者手工编写并对照原文核对，规模小，结论仅供参考。
+recipe:
+  # A 菜名直查：关键词检索的强项
+  - {q: 宫保鸡丁怎么做, type: name, expect: [meat_dish/宫保鸡丁]}
+  - {q: 可乐鸡翅, type: name, expect: [meat_dish/可乐鸡翅]}
+  - {q: 酸辣土豆丝的做法, type: name, expect: [vegetable_dish/酸辣土豆丝]}
+  - {q: 扬州炒饭, type: name, expect: [staple/扬州炒饭]}
+  - {q: 麻婆豆腐, type: name, expect: [meat_dish/麻婆豆腐]}
+  # B 同义 / 口语：菜名换了说法
+  - {q: 番茄炒蛋, type: synonym, expect: [vegetable_dish/西红柿炒鸡蛋]}
+  - {q: 柿子炒鸡蛋, type: synonym, expect: [vegetable_dish/西红柿炒鸡蛋]}
+  - {q: 马铃薯丝 酸辣口, type: synonym, expect: [vegetable_dish/酸辣土豆丝]}
+  - {q: 东北锅包肉, type: synonym, expect: [meat_dish/老式锅包肉]}
+  - {q: 圆白菜用手撕着炒, type: synonym, expect: [vegetable_dish/手撕包菜]}
+  - {q: 鸡蛋羹怎么蒸才嫩, type: synonym, expect: [vegetable_dish/鸡蛋羹, vegetable_dish/微波炉鸡蛋羹, vegetable_dish/蒸箱鸡蛋羹, breakfast/蒸水蛋]}
+  # C 描述性需求：不出现菜名，考察语义理解
+  - {q: 用啤酒炖的鸭子, type: describe, expect: [meat_dish/啤酒鸭, meat_dish/乡村啤酒鸭]}
+  - {q: 夏天解暑的酸甜饮料 用乌梅煮, type: describe, expect: [drink/酸梅汤, drink/酸梅汤（半成品加工）]}
+  - {q: 东北炖菜 白菜猪肉和粉条, type: describe, expect: [meat_dish/白菜猪肉炖粉条]}
+  - {q: 意大利咖啡味甜点 手指饼干和马斯卡彭, type: describe, expect: [dessert/提拉米苏]}
+  - {q: 广西的酸笋米粉, type: describe, expect: [staple/螺蛳粉, staple/老友猪肉粉]}
+  - {q: 茄子土豆青椒一起烧的东北菜, type: describe, expect: [vegetable_dish/地三鲜]}
+  - {q: 冬天喝了暖身的羊肉汤, type: describe, expect: [soup/羊肉汤]}
+  - {q: 不用开火 微波炉就能做的鸡蛋早餐, type: describe, expect: [breakfast/微波炉荷包蛋, breakfast/微波炉蒸蛋, vegetable_dish/微波炉鸡蛋羹]}
+  - {q: 酸酸甜甜的排骨, type: describe, expect: [meat_dish/糖醋排骨]}
+  - {q: 外酥里嫩的油炸猪肉条, type: describe, expect: [meat_dish/小酥肉, meat_dish/椒盐排条]}
+  # D 步骤细节：答案藏在操作步骤里
+  - {q: 肉蟹蘸生粉 先煎封住蟹黄 再加咖喱, type: step, expect: [aquatic/咖喱炒蟹]}
+  - {q: 冰粉籽装纱布袋里搓出来, type: step, expect: [drink/冰粉]}
+  - {q: 五花肉先煮再切片 加豆瓣酱和蒜苗回锅炒, type: step, expect: [meat_dish/回锅肉]}
+  - {q: 鸭肉焯水后加 1000ml 啤酒烧 30 分钟, type: step, expect: [meat_dish/乡村啤酒鸭]}
+tip:
+  - {q: 油温几成热怎么判断, expect: [tips/advanced/油温判断技巧]}
+  - {q: 焯水应该冷水下锅还是开水下锅, expect: [tips/learn/学习焯水]}
+  - {q: 剩菜隔夜还能吃吗, expect: [tips/learn/食品安全]}
+  - {q: 空气炸锅要不要预热, expect: [tips/learn/空气炸锅]}
+  - {q: 怎么炒糖色, expect: [tips/advanced/糖色的炒制]}
+  - {q: 鱼和肉怎么去除腥味, expect: [tips/learn/去腥]}

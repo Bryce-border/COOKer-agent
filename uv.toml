@@ -1,0 +1,7 @@
+# 项目级 uv 配置：缓存、Python 解释器都放在项目目录内，不污染全局环境
+cache-dir = "./.cache/uv"
+python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone"
+
+[[index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

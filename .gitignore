@@ -1,0 +1,19 @@
+# 密钥
+api.txt
+.env
+
+# 项目内工具链 / 缓存 / 模型（体积大、可重新下载）
+tools/
+.cache/
+models/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 上游数据仓库（独立 git 仓库，单独 git pull 同步）
+HowToCook/
+
+# 生成的数据与索引（可由 ingest 重新生成；LLM 抽取缓存单独保留可选）
+data/
+.langgraph_api/
