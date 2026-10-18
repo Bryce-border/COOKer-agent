@@ -2,7 +2,7 @@
 
 本地部署的个人做饭助手 Agent，数据来自 [HowToCook](https://github.com/Anduin2017/HowToCook)。
 
-## 当前状态（P2 完成）
+## 当前状态（P0–P2 已实现，P3 前端已接入）
 
 | 层 | 状态 | 位置 |
 |---|---|---|
@@ -13,7 +13,10 @@
 | 服务层 | ✅ 已实现 | `src/cooker/service.py` |
 | MCP 工具层（7 个工具，stdio / HTTP） | ✅ 已实现 | `src/cooker/mcp_server/server.py` |
 | LangGraph Agent（ReAct + verify 校验 + 档案记忆 + 人在回路） | ✅ 已实现，已评测（TD-19） | `src/cooker/agent/` |
-| 前端（agent-chat-ui） | ⏳ P3 计划 | — |
+| 前端（agent-chat-ui） | ✅ 已接入：流式聊天、菜谱抽屉、购物清单、中断确认、模型切换 | `web/` |
+| 菜谱 HTTP API | ✅ 已实现：详情与本地图片 | `src/cooker/api.py` |
+
+当前面向单用户本地运行；聊天、向量与重排使用云端 API。安装和启动以 [README](../README.md) 为准，数据更新与备份见 [使用与维护](usage.md)。
 
 ## 目录
 
@@ -51,7 +54,8 @@ COOKer-agent/
 │   └── mcp_server/server.py  FastMCP 工具定义（cooker-mcp）
 ├── data/                   生成物（gitignore）：recipes.json / tips.json / ingest_report.json / cache/facts/
 ├── eval/                   检索消融评测、Agent 场景评测
-├── langgraph.json          langgraph dev / Aegra 加载入口（图 cooker）
+├── web/                    Next.js 前端，连接 LangGraph Server
+├── langgraph.json          图 cooker 和自定义 HTTP 路由的加载入口
 ├── tests/                  pytest；-m live 运行真实 API 测试
 ├── scripts/uv(.cmd)        项目内 uv 包装（Python、缓存都在项目目录）
 └── tools/                  uv 与 Python 解释器（gitignore）
@@ -81,11 +85,12 @@ data/recipes.json（372 道）、data/tips.json（18 篇）、data/ingest_report
 
 ## 运行
 
-```bash
-scripts/uv sync                       # 安装依赖到 .venv
-.venv/Scripts/cooker-ingest           # 入库（增量）
-.venv/Scripts/python -m pytest        # 单元测试
-.venv/Scripts/python -m pytest -m live  # 真实 API 测试（Qwen + DeepSeek）
+```powershell
+$env:PYTHONUTF8 = "1"
+uv sync --locked                      # 安装依赖到 .venv
+.\.venv\Scripts\cooker-ingest.exe     # 入库（缓存增量复用）
+.\.venv\Scripts\cooker-index.exe      # 同步重建检索索引
+.\.venv\Scripts\python.exe -m pytest  # 默认离线测试
 ```
 
 Windows 下建议设置 `PYTHONUTF8=1`，否则控制台中文可能乱码（数据本身无误）。
@@ -116,10 +121,11 @@ search_recipes(query, 过滤条件)
 
 ## Agent 运行方式
 
-```bash
-.venv/Scripts/cooker-chat                  # 终端聊天，数据在 data/agent.db
-.venv/Scripts/cooker-chat --provider deepseek
-.venv/Scripts/langgraph dev --no-browser   # LangGraph Server：http://127.0.0.1:2024（P3 前端连接它）
+```powershell
+$env:PYTHONUTF8 = "1"
+.\.venv\Scripts\cooker-chat.exe
+.\.venv\Scripts\cooker-chat.exe --provider deepseek
+.\.venv\Scripts\langgraph.exe dev --no-browser --host 127.0.0.1 --port 2024
 ```
 
-Agent 链路详见 core-flows.md。
+CLI 与 Server 是不同运行入口，记忆不自动互通。Web 在另一终端通过 `pnpm dev` 启动，Graph ID 为 `cooker`。Agent 链路详见 [core-flows.md](core-flows.md)。

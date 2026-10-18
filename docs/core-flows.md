@@ -20,7 +20,8 @@ route_after_agent
   │     → 回到 agent
   └─ 无 tool_calls → verify 节点（确定性校验）
         通过 → END
-        不通过且重答 < 2 次 → RemoveMessage(这版回答) + 隐藏的校验反馈 → agent（强制调工具）
+        不通过且重答 < 2 次 → RemoveMessage(这版回答) + 隐藏的校验反馈 → agent
+          缺少查询依据时强制调工具；仅库外菜名时允许改写
         不通过且已重答 2 次 → 回答末尾追加「未能与菜谱库核对」→ END
 ```
 
@@ -43,4 +44,12 @@ update_profile(remove_allergies=[花生])
 | 菜谱、技巧 | `data/recipes.json`、`tips.json`（内存常驻） | `cooker-ingest` 重建 |
 | 检索索引 | `data/index/`（numpy 向量 + 块） | `cooker-index` 重建 |
 | 会话历史、中断状态 | checkpointer：CLI 用 `data/agent.db`，Server 由平台管理 | 按 thread_id |
-| 用户档案 | store：namespace `("users", user_id)`，key `profile` | 跨会话永久 |
+| 用户档案 | store：namespace `("users", user_id)`，key `profile` | 同一存储内跨会话保留；依赖底层数据持久化与备份 |
+
+CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管理的状态（`.langgraph_api/`），两套记忆不自动同步。Web 当前未传 user_id，使用默认的 `local` 档案；新建会话不会清空偏好。
+
+## Web 操作链路
+
+普通消息由 LangGraph SDK 提交，运行上下文传入模型 provider。菜名引用转为可点击按钮，打开抽屉后通过 `GET /cooker/recipes?name=...` 读取原文，本地图片走 `/cooker/images/...`。这些读取不调用 LLM。
+
+抽屉中的换算按钮会发送新的聊天消息，由 Agent 调用换算工具；过敏原确认按钮通过 `Command(resume=...)` 恢复同一会话。完整启动步骤见 [README](../README.md)。

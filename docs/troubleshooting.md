@@ -1,5 +1,57 @@
 # 问题排查记录
 
+## 启动检查（Windows PowerShell）
+
+完整步骤见 [README](../README.md)。后端与前端应分别在两个终端运行：
+
+```powershell
+# 项目根目录，终端一
+$env:PYTHONUTF8 = "1"
+.\.venv\Scripts\langgraph.exe dev --no-browser --host 127.0.0.1 --port 2024
+```
+
+```powershell
+# 项目根目录，终端二
+Set-Location web
+pnpm dev --hostname 127.0.0.1 --port 3000
+```
+
+可用 `Invoke-WebRequest http://127.0.0.1:2024/info` 检查后端，用浏览器访问 [http://localhost:3000](http://localhost:3000) 检查前端。这些检查不证明云端模型当前可用。
+
+## 前端连接失败或找不到图
+
+- 确认后端已启动，并且 `/info` 返回 200。
+- `web/.env` 使用 `NEXT_PUBLIC_API_URL=http://localhost:2024` 和 `NEXT_PUBLIC_ASSISTANT_ID=cooker`；修改后重启前端。
+- 未配置环境变量时，连接表单中的 Graph ID 要改为 `cooker`，不能保留模板默认的 `agent`。本地 LangSmith Key 留空。
+- 从另一台设备访问时，localhost 指向访问者自己的设备。当前文档默认仅本机使用。
+
+## 端口被占用
+
+先检查占用进程，不要直接结束未知服务：
+
+```powershell
+Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 2024,3000 |
+    Select-Object LocalAddress,LocalPort,OwningProcess
+```
+
+若改用其它后端端口，需要同步修改前端 API URL 并重启前端。
+
+## 数据缺失、索引不匹配或换算不可用
+
+- 缺少 recipes.json / tips.json：先完整运行 cooker-ingest。
+- 索引缺失或 embedding 签名变化：运行 cooker-index。
+- 刚更新上游或重新入库：同步重建索引并重启进程，避免旧缓存与新数据混用。
+- 使用 --no-llm、--limit 或 --only 后部分菜无法换算：检查 ingest_report.json 的 with_facts；这些命令仍会重写完整菜谱文件。恢复时完整入库，再建索引。
+- 不要通过删除整个 data 目录排障，其中包含 CLI 的会话与偏好。备份方式见 [使用与维护](usage.md)。
+
+## PowerShell 运行 pnpm lint 报环境变量命令错误
+
+现有 lint 脚本使用 POSIX 赋值语法；PowerShell 等价命令见 [前端说明](../web/README.md#开发命令)。
+
+## 页面首次编译较慢或字体下载失败
+
+首次访问会触发 Next.js 编译，等待终端显示请求完成。项目通过 next/font/google 加载 Inter，网络不可用时检查字体下载日志；必要时改用本地字体。不要把 API 连接失败和前端编译失败混为一谈。
+
 ## 控制台中文乱码（`���`）
 
 - **现象**：模型返回内容在终端显示为 `���`。

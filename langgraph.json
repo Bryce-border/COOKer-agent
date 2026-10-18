@@ -3,5 +3,8 @@
   "graphs": {
     "cooker": "./src/cooker/agent/graph.py:graph"
   },
+  "http": {
+    "app": "./src/cooker/api.py:app"
+  },
   "env": ".env"
 }

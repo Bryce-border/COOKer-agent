@@ -152,3 +152,17 @@
   换成 qwen3.7-plus 后同样的代码几乎不再触发校验。verify 节点保留，作为模型退化或切换时的兜底。
 - **注意**：「看到结果后修改判定条件」只发生过一次（multi_turn_followup：指代不明时反问是正确行为），原因与修改都记录在评测脚本中。
 - **未验证**：qwen3.7-plus 与 qwen-plus 的价格差异未核实，需在百炼控制台确认。
+
+## TD-20 前端：基于 agent-chat-ui 二次开发，最小改动
+
+- **复用**：agent-chat-ui（MIT，Next.js + `@langchain/langgraph-sdk` 的 `useStream`）已有流式渲染、会话历史、中断、分支切换；直接连 `langgraph dev`（:2024），不写后端聊天接口。
+- **改动集中在** `web/src/components/cooker/`（新组件）与 `web/src/lib/cooker.ts`；对原文件只做接线：
+  - `markdown-text.tsx`：自定义 `a` 组件，`#recipe:` 链接渲染为菜谱按钮
+  - `messages/ai.tsx`：回答先 `linkifyRecipes()`；`type: "confirm"` 中断渲染为确认卡片
+  - `messages/tool-calls.tsx`：默认显示中文一行摘要，展开看原始参数；购物清单渲染为可勾选清单
+  - `thread/index.tsx`：抽出 `submitMessage`（输入框、示例问题、菜谱抽屉共用）；每次运行传 `context.provider`；中文文案
+- **【菜名】→ `#recipe:` 锚点链接**：react-markdown 会清洗非 http(s) 协议的 URL，用锚点最稳；按钮点击不跳转，只打开抽屉。
+- **菜谱详情走自定义路由**（`src/cooker/api.py`，挂在 LangGraph Server 的 `http.app`）：前端点击卡片不经过 LLM，零 token、毫秒级。
+  路由用同步 `def`（Starlette 放进线程池），避免阻塞 IO 卡住同进程的流式对话。
+- **图片接口的路径穿越防护**：`resolve()` 后用 `is_relative_to(dishes 根)` 判断，越界 / 非图片 / 不存在统一 404；测试覆盖 `..`、URL 编码、绝对路径。
+- **模型切换**存在 URL 查询参数 `?provider=`，经 `context` 传给后端 `Context.provider`（实测 HTTP 传入的 dict 能正确转换为 dataclass）。
