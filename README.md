@@ -4,6 +4,8 @@
 
 提供 Web 聊天、终端聊天和 MCP 工具。应用与数据保存在本机，聊天、结构化抽取、向量化和重排使用云端 API，因此不是完全离线应用。
 
+同时COOKer不一样的地方是提供个人记忆功能，用户可以在不同会话中保持偏好设置和查询记录。他会记住用户的过敏原、偏好和查询记录，根据这些信息推荐合适的菜谱和提醒~
+
 ## 功能
 
 | 需求 | 示例 | 实现 |
@@ -165,3 +167,11 @@ $env:PYTHONUTF8 = "1"
 ## 数据与第三方许可
 
 菜谱来自 HowToCook（Unlicense），不随本仓库分发。前端基于 [agent-chat-ui](https://github.com/langchain-ai/agent-chat-ui)，保留其 MIT 许可，见 [web/LICENSE](web/LICENSE)。
+
+## 作品演示
+### 1. 菜谱生成
+![alt text](image.png)
+### 2. 菜谱问答
+![alt text](image-2.png)
+### 3. 个人记忆
+![alt text](image-1.png)
