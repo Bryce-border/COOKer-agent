@@ -5,6 +5,7 @@ import React, {
   useState,
   useEffect,
   useMemo,
+  useRef,
 } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { type Message } from "@langchain/langgraph-sdk";
@@ -27,6 +28,8 @@ import { getApiKey, setApiKey as storeApiKey } from "@/lib/api-key";
 import { resolveApiUrl } from "@/lib/resolve-api-url";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
+import { createClient } from "./client";
+import { useConversationHistory } from "@/hooks/use-conversation-history";
 
 export type StateType = { messages: Message[]; ui?: UIMessage[] };
 
@@ -44,12 +47,9 @@ const useTypedStream = useStream<
 
 type StreamContextType = ReturnType<typeof useTypedStream> & {
   apiUrl: string;
+  retryHistory: () => void;
 };
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
-
-async function sleep(ms = 4000) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 async function checkGraphStatus(
   apiUrl: string,
@@ -78,16 +78,26 @@ const StreamSession = ({
   apiUrl,
   assistantId,
   authScheme,
+  retryHistory,
 }: {
   children: ReactNode;
   apiKey: string | null;
   apiUrl: string;
   assistantId: string;
   authScheme?: string;
+  retryHistory: () => void;
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
-  const { getThreads, setThreads } = useThreads();
+  const { refreshThreads } = useThreads();
+  const client = useMemo(
+    () => createClient(apiUrl, apiKey ?? undefined, authScheme),
+    [apiUrl, apiKey, authScheme],
+  );
+  const createdThread = useRef<string | null>(null);
+  const history = useConversationHistory(client, threadId, createdThread);
   const streamValue = useTypedStream({
+    client,
+    thread: history,
     apiUrl,
     apiKey: apiKey ?? undefined,
     assistantId,
@@ -97,7 +107,11 @@ const StreamSession = ({
       },
     }),
     threadId: threadId ?? null,
-    fetchStateHistory: true,
+    // 最新检查点已包含完整 messages；无需一次下载十份累计聊天正文。
+    fetchStateHistory: { limit: 1 },
+    onFinish: () => {
+      void refreshThreads();
+    },
     onCustomEvent: (event, options) => {
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
         options.mutate((prev) => {
@@ -107,21 +121,20 @@ const StreamSession = ({
       }
     },
     onThreadId: (id) => {
+      createdThread.current = id;
       setThreadId(id);
-      // Refetch threads list when thread ID changes.
-      // Wait for some seconds before fetching so we're able to get the new thread that was created.
-      sleep().then(() => getThreads().then(setThreads).catch(console.error));
+      void refreshThreads();
     },
   });
 
   useEffect(() => {
     checkGraphStatus(apiUrl, apiKey, authScheme).then((ok) => {
       if (!ok) {
-        toast.error("Failed to connect to LangGraph server", {
+        toast.error("无法连接做饭助手服务", {
           description: () => (
             <p>
-              Please ensure your graph is running at <code>{apiUrl}</code> and
-              your API key is correctly set (if connecting to a deployed graph).
+              请确认服务已在 <code>{apiUrl}</code>{" "}
+              启动；连接远程服务时，请检查密钥配置。
             </p>
           ),
           duration: 10000,
@@ -133,7 +146,7 @@ const StreamSession = ({
   }, [apiKey, apiUrl, authScheme]);
 
   return (
-    <StreamContext.Provider value={{ ...streamValue, apiUrl }}>
+    <StreamContext.Provider value={{ ...streamValue, apiUrl, retryHistory }}>
       {children}
     </StreamContext.Provider>
   );
@@ -141,7 +154,7 @@ const StreamSession = ({
 
 // Default values for the form
 const DEFAULT_API_URL = "http://localhost:2024";
-const DEFAULT_ASSISTANT_ID = "agent";
+const DEFAULT_ASSISTANT_ID = "cooker";
 const AGENT_BUILDER_AUTH_SCHEME = "langsmith-api-key";
 
 export const StreamProvider: React.FC<{ children: ReactNode }> = ({
@@ -174,6 +187,7 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   const finalAuthScheme = authScheme || envAuthScheme || "";
 
   const apiKey = useMemo(() => getApiKey(finalApiUrl) || "", [finalApiUrl]);
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   // Show the form if we: don't have an API URL, or don't have an assistant ID
   if (!finalApiUrl || !finalAssistantId) {
@@ -184,12 +198,11 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
             <div className="flex flex-col items-start gap-2">
               <LangGraphLogoSVG className="h-7" />
               <h1 className="text-xl font-semibold tracking-tight">
-                Agent Chat
+                COOKer 做饭助手
               </h1>
             </div>
             <p className="text-muted-foreground">
-              Welcome to Agent Chat! Before you get started, you need to enter
-              the URL of the deployment and the assistant / graph ID.
+              欢迎使用 COOKer！请先填写服务地址和助手标识，连接后即可开始聊天。
             </p>
           </div>
           <form
@@ -213,11 +226,10 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
           >
             <div className="flex flex-col gap-2">
               <Label htmlFor="apiUrl">
-                Deployment URL<span className="text-rose-500">*</span>
+                服务地址<span className="text-rose-500">*</span>
               </Label>
               <p className="text-muted-foreground text-sm">
-                This is the URL of your LangGraph deployment. Can be a local, or
-                production deployment.
+                填写本地或远程服务地址。本地默认使用 http://localhost:2024。
               </p>
               <Input
                 id="apiUrl"
@@ -230,12 +242,10 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="assistantId">
-                Assistant / Graph ID<span className="text-rose-500">*</span>
+                助手标识<span className="text-rose-500">*</span>
               </Label>
               <p className="text-muted-foreground text-sm">
-                This is the ID of the graph (can be the graph name), or
-                assistant to fetch threads from, and invoke when actions are
-                taken.
+                COOKer 的助手标识为 cooker，用于加载对话和发送消息。
               </p>
               <Input
                 id="assistantId"
@@ -247,12 +257,10 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="apiKey">LangSmith API Key</Label>
+              <Label htmlFor="apiKey">LangSmith API 密钥</Label>
               <p className="text-muted-foreground text-sm">
-                This is <strong>NOT</strong> required if using a local LangGraph
-                server. This value is stored in your browser's local storage and
-                is only used to authenticate requests sent to your LangGraph
-                server.
+                本地使用<strong>无需填写</strong>
+                。密钥保存在当前浏览器中，仅用于验证发往服务端的请求。
               </p>
               <PasswordInput
                 id="apiKey"
@@ -267,10 +275,10 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="agentBuilderEnabled">
-                    Built with Agent Builder
+                    使用 Agent Builder 部署
                   </Label>
                   <p className="text-muted-foreground text-sm">
-                    Enable this for Agent Builder deployments.
+                    仅在服务使用 Agent Builder 部署时开启。
                   </p>
                 </div>
                 <Switch
@@ -286,7 +294,7 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
                 type="submit"
                 size="lg"
               >
-                Continue
+                连接助手
                 <ArrowRight className="size-5" />
               </Button>
             </div>
@@ -298,6 +306,8 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
 
   return (
     <StreamSession
+      key={`${finalApiUrl}:${finalAssistantId}:${finalAuthScheme}:${historyVersion}`}
+      retryHistory={() => setHistoryVersion((v) => v + 1)}
       apiKey={apiKey}
       apiUrl={finalApiUrl}
       assistantId={finalAssistantId}

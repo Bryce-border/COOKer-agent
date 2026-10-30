@@ -78,7 +78,7 @@ export function unknownToPrettyDate(input: unknown): string | undefined {
       Object.prototype.toString.call(input) === "[object Date]" ||
       new Date(input as string)
     ) {
-      return format(new Date(input as string), "MM/dd/yyyy hh:mm a");
+      return format(new Date(input as string), "yyyy年MM月dd日 HH:mm");
     }
   } catch (_) {
     // failed to parse date. no-op
@@ -163,7 +163,7 @@ export function buildDecisionFromState(
   selectedSubmitType: SubmitType | undefined,
 ): { decision?: Decision; error?: string } {
   if (!responses.length) {
-    return { error: "Please enter a response." };
+    return { error: "请输入回复。" };
   }
 
   const selectedDecision = responses.find(
@@ -171,7 +171,7 @@ export function buildDecisionFromState(
   );
 
   if (!selectedDecision) {
-    return { error: "No response selected." };
+    return { error: "请选择处理方式。" };
   }
 
   if (selectedDecision.type === "approve") {
@@ -181,7 +181,7 @@ export function buildDecisionFromState(
   if (selectedDecision.type === "reject") {
     const message = selectedDecision.message?.trim();
     if (!message) {
-      return { error: "Please provide a rejection reason." };
+      return { error: "请填写拒绝原因。" };
     }
     return { decision: { type: "reject", message } };
   }
@@ -199,7 +199,7 @@ export function buildDecisionFromState(
     };
   }
 
-  return { error: "Unsupported response type." };
+  return { error: "不支持此回复类型。" };
 }
 
 export function constructOpenInStudioURL(

@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { useThreads } from "@/providers/Thread";
 import { Thread } from "@langchain/langgraph-sdk";
-import { useEffect } from "react";
+import { useState } from "react";
+import { useStreamContext } from "@/providers/Stream";
+import { toast } from "sonner";
 
 import { getContentString } from "../utils";
 import { useQueryState, parseAsBoolean } from "nuqs";
@@ -12,7 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PanelRightOpen, PanelRightClose } from "lucide-react";
+import { PanelRightOpen, PanelRightClose, Trash2 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 function ThreadList({
@@ -23,6 +25,29 @@ function ThreadList({
   onThreadClick?: (threadId: string) => void;
 }) {
   const [threadId, setThreadId] = useQueryState("threadId");
+  const { deleteThread } = useThreads();
+  const stream = useStreamContext();
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const remove = async (id: string) => {
+    if (
+      !window.confirm(
+        "确定永久删除这段对话吗？删除后无法恢复，长期偏好不受影响。",
+      )
+    )
+      return;
+    setDeleting(id);
+    try {
+      if (id === threadId && stream.isLoading) await stream.stop();
+      await deleteThread(id);
+      if (id === threadId) await setThreadId(null);
+      toast.success("对话已删除");
+    } catch {
+      toast.error("删除失败，对话已保留，请稍后重试。");
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   return (
     <div className="flex h-full w-full flex-col items-start justify-start gap-2 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent">
@@ -41,11 +66,13 @@ function ThreadList({
         return (
           <div
             key={t.thread_id}
-            className="w-full px-1"
+            className="flex w-full min-w-0 items-center px-1"
           >
             <Button
               variant="ghost"
-              className="w-[280px] items-start justify-start text-left font-normal"
+              className="min-w-0 flex-1 items-start justify-start text-left font-normal"
+              aria-current={t.thread_id === threadId ? "page" : undefined}
+              disabled={!!deleting || stream.isLoading}
               onClick={(e) => {
                 e.preventDefault();
                 onThreadClick?.(t.thread_id);
@@ -54,6 +81,15 @@ function ThreadList({
               }}
             >
               <p className="truncate text-ellipsis">{itemText}</p>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`删除对话：${itemText}`}
+              disabled={!!deleting}
+              onClick={() => void remove(t.thread_id)}
+            >
+              <Trash2 className="size-4" />
             </Button>
           </div>
         );
@@ -82,17 +118,34 @@ export default function ThreadHistory() {
     parseAsBoolean.withDefault(false),
   );
 
-  const { getThreads, threads, setThreads, threadsLoading, setThreadsLoading } =
+  const { refreshThreads, threads, threadsLoading, threadsError } =
     useThreads();
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setThreadsLoading(true);
-    getThreads()
-      .then(setThreads)
-      .catch(console.error)
-      .finally(() => setThreadsLoading(false));
-  }, []);
+  const list = threadsLoading ? (
+    <ThreadHistoryLoading />
+  ) : threadsError ? (
+    <div
+      role="alert"
+      className="space-y-3 p-4 text-sm"
+    >
+      <p>{threadsError}</p>
+      <Button
+        variant="outline"
+        onClick={() => void refreshThreads()}
+      >
+        重试加载
+      </Button>
+    </div>
+  ) : threads.length ? (
+    <ThreadList
+      threads={threads}
+      onThreadClick={() => {
+        if (!isLargeScreen) void setChatHistoryOpen(false);
+      }}
+    />
+  ) : (
+    <p className="p-4 text-sm text-gray-500">还没有对话，发条消息开始吧。</p>
+  );
 
   return (
     <>
@@ -109,15 +162,9 @@ export default function ThreadHistory() {
               <PanelRightClose className="size-5" />
             )}
           </Button>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Thread History
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight">历史对话</h1>
         </div>
-        {threadsLoading ? (
-          <ThreadHistoryLoading />
-        ) : (
-          <ThreadList threads={threads} />
-        )}
+        {list}
       </div>
       <div className="lg:hidden">
         <Sheet
@@ -132,12 +179,9 @@ export default function ThreadHistory() {
             className="flex lg:hidden"
           >
             <SheetHeader>
-              <SheetTitle>Thread History</SheetTitle>
+              <SheetTitle>历史对话</SheetTitle>
             </SheetHeader>
-            <ThreadList
-              threads={threads}
-              onThreadClick={() => setChatHistoryOpen((o) => !o)}
-            />
+            {list}
           </SheetContent>
         </Sheet>
       </div>

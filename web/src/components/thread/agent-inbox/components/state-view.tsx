@@ -29,13 +29,13 @@ const messageTypeToLabel = (message: BaseMessage) => {
 
   switch (type) {
     case "human":
-      return "User";
+      return "用户";
     case "ai":
-      return "Assistant";
+      return "助手";
     case "tool":
-      return "Tool";
+      return "工具";
     case "System":
-      return "System";
+      return "系统";
     default:
       return "";
   }
@@ -243,7 +243,7 @@ export function StateView({
   const [expanded, setExpanded] = useState(false);
 
   if (!values) {
-    return <div>No state found</div>;
+    return <div>暂无状态信息</div>;
   }
 
   return (
@@ -257,7 +257,7 @@ export function StateView({
       {view === "description" && (
         <div className="pt-6 pb-2">
           <MarkdownText>
-            {description ?? "No description provided"}
+            {description ?? "暂无说明"}
           </MarkdownText>
         </div>
       )}

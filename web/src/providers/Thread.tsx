@@ -9,6 +9,8 @@ import {
   ReactNode,
   useCallback,
   useState,
+  useEffect,
+  useRef,
   Dispatch,
   SetStateAction,
 } from "react";
@@ -20,6 +22,9 @@ interface ThreadContextType {
   setThreads: Dispatch<SetStateAction<Thread[]>>;
   threadsLoading: boolean;
   setThreadsLoading: Dispatch<SetStateAction<boolean>>;
+  refreshThreads: () => Promise<void>;
+  deleteThread: (id: string) => Promise<void>;
+  threadsError: string | null;
 }
 
 const ThreadContext = createContext<ThreadContextType | undefined>(undefined);
@@ -49,6 +54,8 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   });
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  const [threadsError, setThreadsError] = useState<string | null>(null);
+  const generation = useRef(0);
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
     const finalApiUrl = resolveApiUrl(apiUrl, envApiUrl);
@@ -70,12 +77,55 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     return threads;
   }, [apiUrl, envApiUrl, assistantId, authScheme, envAssistantId]);
 
+  const refreshThreads = useCallback(async () => {
+    const request = ++generation.current;
+    setThreadsLoading(true);
+    setThreadsError(null);
+    try {
+      const result = await getThreads();
+      if (request === generation.current) setThreads(result);
+    } catch {
+      if (request === generation.current)
+        setThreadsError("对话列表加载失败，请确认后端服务已启动后重试。");
+    } finally {
+      if (request === generation.current) setThreadsLoading(false);
+    }
+  }, [getThreads]);
+
+  useEffect(() => {
+    setThreads([]);
+    void refreshThreads();
+    return () => {
+      generation.current++;
+    };
+  }, [refreshThreads]);
+
+  const deleteThread = useCallback(
+    async (id: string) => {
+      const url = resolveApiUrl(apiUrl, envApiUrl);
+      const client = createClient(
+        url,
+        getApiKey(url) ?? undefined,
+        authScheme || undefined,
+      );
+      await client.threads.delete(id);
+      // 使删除前发出的列表请求过期，防止已删除对话重新出现在列表中。
+      generation.current++;
+      setThreadsLoading(false);
+      setThreads((items) => items.filter((t) => t.thread_id !== id));
+    },
+    [apiUrl, envApiUrl, authScheme],
+  );
+
   const value = {
     getThreads,
     threads,
     setThreads,
     threadsLoading,
     setThreadsLoading,
+    refreshThreads,
+    deleteThread,
+    threadsError,
   };
 
   return (

@@ -40,7 +40,7 @@ function ButtonGroup({
         size="sm"
         onClick={handleShowState}
       >
-        State
+        状态
       </Button>
       <Button
         variant="outline"
@@ -51,7 +51,7 @@ function ButtonGroup({
         size="sm"
         onClick={handleShowDescription}
       >
-        Description
+        说明
       </Button>
     </div>
   );
@@ -77,7 +77,7 @@ function getDecisionStatus(
 }
 
 function getActionTitle(action?: ActionRequest) {
-  return action?.name ?? "Unknown interrupt";
+  return action?.name ?? "未知确认请求";
 }
 
 export function ThreadActionsView({
@@ -154,8 +154,8 @@ export function ThreadActionsView({
 
   const handleOpenInStudio = () => {
     if (!apiUrl) {
-      toast.error("Error", {
-        description: "Please set the LangGraph deployment URL in settings.",
+      toast.error("操作失败", {
+        description: "请先在连接设置中填写服务地址。",
         duration: 5000,
         richColors: true,
         closeButton: true,
@@ -184,14 +184,14 @@ export function ThreadActionsView({
         },
       );
 
-      toast("Success", {
-        description: "All actions approved successfully.",
+      toast("操作成功", {
+        description: "已批准全部操作。",
         duration: 5000,
       });
     } catch (error) {
       console.error("Error approving all actions", error);
-      toast.error("Error", {
-        description: "Failed to approve all actions.",
+      toast.error("操作失败", {
+        description: "批准全部操作失败。",
         richColors: true,
         closeButton: true,
         duration: 5000,
@@ -203,7 +203,7 @@ export function ThreadActionsView({
     if (!hasMultipleActions) return;
 
     if (addressedActions.size !== actionRequests.length) {
-      toast.error("Error", {
+      toast.error("操作失败", {
         description: `Please address all ${actionRequests.length} actions before submitting.`,
         richColors: true,
         closeButton: true,
@@ -217,7 +217,7 @@ export function ThreadActionsView({
       const allDecisions = actionRequests.map((_, index) => {
         const decision = addressedActions.get(index);
         if (!decision) {
-          throw new Error(`Missing decision for action ${index + 1}`);
+          throw new Error(`第 ${index + 1} 项尚未选择处理方式`);
         }
         return decision;
       });
@@ -231,15 +231,15 @@ export function ThreadActionsView({
         },
       );
 
-      toast("Success", {
-        description: "All actions submitted successfully.",
+      toast("操作成功", {
+        description: "已提交全部操作。",
         duration: 5000,
       });
       setAddressedActions(new Map());
     } catch (error) {
       console.error("Error submitting all actions", error);
-      toast.error("Error", {
-        description: "Failed to submit actions.",
+      toast.error("操作失败", {
+        description: "操作提交失败。",
         richColors: true,
         closeButton: true,
         duration: 5000,
@@ -266,8 +266,8 @@ export function ThreadActionsView({
     );
 
     if (!decision || error) {
-      toast.error("Error", {
-        description: error ?? "Unable to determine decision.",
+      toast.error("操作失败", {
+        description: error ?? "无法确定处理方式。",
         richColors: true,
         closeButton: true,
         duration: 5000,
@@ -281,8 +281,8 @@ export function ThreadActionsView({
       return next;
     });
 
-    toast("Success", {
-      description: `Action ${currentIndex + 1} captured.`,
+    toast("操作成功", {
+      description: `已记录第 ${currentIndex + 1} 项处理结果。`,
       duration: 3000,
     });
 
@@ -300,8 +300,7 @@ export function ThreadActionsView({
     return (
       <div className="flex min-h-full w-full flex-col items-center justify-center rounded-2xl bg-gray-50/50 p-8">
         <p className="text-sm text-gray-600">
-          Unable to render interrupt. The data provided is not in the expected
-          HITL format.
+          无法显示确认请求，返回的数据格式不符合要求。
         </p>
       </div>
     );
@@ -346,7 +345,7 @@ export function ThreadActionsView({
           onClick={handleResolve}
           disabled={actionsDisabled}
         >
-          Mark as Resolved
+          标记为已处理
         </Button>
         {hasMultipleActions && allAllowApprove && (
           <Button
@@ -355,7 +354,7 @@ export function ThreadActionsView({
             onClick={handleApproveAll}
             disabled={actionsDisabled}
           >
-            Approve All
+            全部批准
           </Button>
         )}
       </div>
@@ -379,7 +378,7 @@ export function ThreadActionsView({
                     "outline-primary outline-2 outline-offset-2",
                 )}
               >
-                <span className="sr-only">Action {index + 1}</span>
+                <span className="sr-only">操作 {index + 1}</span>
               </button>
             );
           })}
@@ -412,7 +411,7 @@ export function ThreadActionsView({
               disabled={currentIndex === 0}
               onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
             >
-              Previous
+              上一项
             </Button>
             <Button
               variant="outline"
@@ -424,7 +423,7 @@ export function ThreadActionsView({
                 )
               }
             >
-              Next
+              下一项
             </Button>
           </div>
           <Button
@@ -433,15 +432,15 @@ export function ThreadActionsView({
             onClick={handleSubmitAll}
           >
             {submittingAll
-              ? "Submitting..."
-              : `Submit all ${actionRequests.length} decisions`}
+              ? "正在提交…"
+              : `提交全部 ${actionRequests.length} 项处理结果`}
           </Button>
         </div>
       )}
 
       {!hasMultipleActions && streamFinished && (
         <p className="text-base font-medium text-green-600">
-          Successfully finished Graph invocation.
+          本次操作已完成。
         </p>
       )}
     </div>

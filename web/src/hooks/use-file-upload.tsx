@@ -63,7 +63,7 @@ export function useFileUpload({
 
     if (invalidFiles.length > 0) {
       toast.error(
-        "You have uploaded invalid file type. Please upload a JPEG, PNG, GIF, WEBP image or a PDF.",
+        "不支持此文件类型，请上传 JPEG、PNG、GIF、WEBP 图片或 PDF 文件。",
       );
     }
     if (duplicateFiles.length > 0) {
@@ -123,7 +123,7 @@ export function useFileUpload({
 
       if (invalidFiles.length > 0) {
         toast.error(
-          "You have uploaded invalid file type. Please upload a JPEG, PNG, GIF, WEBP image or a PDF.",
+          "不支持此文件类型，请上传 JPEG、PNG、GIF、WEBP 图片或 PDF 文件。",
         );
       }
       if (duplicateFiles.length > 0) {
@@ -243,7 +243,7 @@ export function useFileUpload({
     const uniqueFiles = validFiles.filter((file) => !isDuplicate(file));
     if (invalidFiles.length > 0) {
       toast.error(
-        "You have pasted an invalid file type. Please paste a JPEG, PNG, GIF, WEBP image or a PDF.",
+        "不支持粘贴此文件类型，请使用 JPEG、PNG、GIF、WEBP 图片或 PDF 文件。",
       );
     }
     if (duplicateFiles.length > 0) {

@@ -16,7 +16,7 @@ function ResetButton({ handleReset }: { handleReset: () => void }) {
       className="flex items-center justify-center gap-2 text-gray-500 hover:text-red-500"
     >
       <Undo2 className="h-4 w-4" />
-      <span>Reset</span>
+      <span>重置</span>
     </Button>
   );
 }
@@ -93,7 +93,7 @@ function ApproveOnly({
         onClick={handleSubmit}
         className="w-full"
       >
-        Approve
+        批准
       </Button>
     </div>
   );
@@ -146,11 +146,11 @@ function EditActionCard({
     return null;
   }
 
-  const header = editResponse.acceptAllowed ? "Edit/Approve" : "Edit";
+  const header = editResponse.acceptAllowed ? "编辑或批准" : "编辑";
   const buttonText =
     editResponse.acceptAllowed && !editResponse.editsMade
-      ? "Approve"
-      : "Submit";
+      ? "批准"
+      : "提交";
 
   const handleReset = () => {
     if (!editResponse.edited_action?.args) {
@@ -276,14 +276,14 @@ function RejectActionCard({
   return (
     <div className="flex w-full max-w-full flex-col items-start gap-4 rounded-xl border border-gray-300 p-6">
       <div className="flex w-full items-center justify-between">
-        <p className="text-base font-semibold text-black">Reject</p>
+        <p className="text-base font-semibold text-black">拒绝</p>
         <ResetButton handleReset={() => onChange("", rejectResponse)} />
       </div>
 
       {showArgs && <ArgsRenderer args={actionArgs} />}
 
       <div className="flex w-full flex-col items-start gap-[6px]">
-        <p className="min-w-fit text-sm font-medium">Reason</p>
+        <p className="min-w-fit text-sm font-medium">原因</p>
         <Textarea
           disabled={isLoading}
           className="w-full max-w-full"
@@ -291,7 +291,7 @@ function RejectActionCard({
           onChange={(event) => onChange(event.target.value, rejectResponse)}
           onKeyDown={handleKeyDown}
           rows={4}
-          placeholder="Share feedback with the agent..."
+          placeholder="填写反馈意见…"
         />
       </div>
 
@@ -301,7 +301,7 @@ function RejectActionCard({
           disabled={isLoading}
           onClick={handleSubmit}
         >
-          Submit rejection
+          提交拒绝原因
         </Button>
       </div>
     </div>
@@ -346,8 +346,8 @@ export function InboxItemInput({
       (Array.isArray(change) && !Array.isArray(key)) ||
       (!Array.isArray(change) && Array.isArray(key))
     ) {
-      toast.error("Error", {
-        description: "Unable to update edited values.",
+      toast.error("操作失败", {
+        description: "无法保存编辑内容。",
         richColors: true,
         closeButton: true,
       });
@@ -471,7 +471,7 @@ export function InboxItemInput({
         {supportsMultipleMethods ? (
           <div className="mx-auto mt-3 flex items-center gap-3">
             <Separator className="w-full" />
-            <p className="text-sm text-gray-500">Or</p>
+            <p className="text-sm text-gray-500">或</p>
             <Separator className="w-full" />
           </div>
         ) : null}
@@ -486,11 +486,11 @@ export function InboxItemInput({
         />
 
         {isLoading && (
-          <p className="text-sm text-gray-600">Submitting decision...</p>
+          <p className="text-sm text-gray-600">正在提交处理结果…</p>
         )}
         {selectedSubmitType && supportsMultipleMethods && (
           <p className="text-xs text-gray-500">
-            Currently selected: {prettifyText(selectedSubmitType)}
+            当前选择：{{ approve: "批准", edit: "编辑", reject: "拒绝" }[selectedSubmitType]}
           </p>
         )}
       </div>

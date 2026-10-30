@@ -40,7 +40,7 @@ export const PasswordInput = React.forwardRef<
           />
         )}
         <span className="sr-only">
-          {showPassword ? "Hide password" : "Show password"}
+          {showPassword ? "隐藏密钥" : "显示密钥"}
         </span>
       </Button>
 

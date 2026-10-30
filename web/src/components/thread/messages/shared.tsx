@@ -33,7 +33,7 @@ function ContentCopyable({
     <TooltipIconButton
       onClick={(e) => handleCopy(e)}
       variant="ghost"
-      tooltip="Copy content"
+      tooltip="复制内容"
       disabled={disabled}
     >
       <AnimatePresence
@@ -168,7 +168,7 @@ export function CommandBar({
       <div className="flex items-center gap-2">
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Cancel edit"
+          tooltip="取消编辑"
           variant="ghost"
           onClick={() => {
             setIsEditing(false);
@@ -178,7 +178,7 @@ export function CommandBar({
         </TooltipIconButton>
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Submit"
+          tooltip="提交"
           variant="secondary"
           onClick={handleSubmitEdit}
         >
@@ -197,7 +197,7 @@ export function CommandBar({
       {isAiMessage && !!handleRegenerate && (
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Refresh"
+          tooltip="重新生成"
           variant="ghost"
           onClick={handleRegenerate}
         >
@@ -207,7 +207,7 @@ export function CommandBar({
       {showEdit && (
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Edit"
+          tooltip="编辑"
           variant="ghost"
           onClick={() => {
             setIsEditing?.(true);

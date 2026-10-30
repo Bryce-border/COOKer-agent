@@ -68,7 +68,7 @@ export function GenericInterruptView({
       const strValue = JSON.stringify(value, null, 2);
       if (strValue.length > 100) {
         // Return plain text for truncated content instead of a JSON object
-        return `Truncated ${strValue.length} characters...`;
+        return `内容已折叠，共 ${strValue.length} 个字符…`;
       }
     }
 
@@ -95,7 +95,7 @@ export function GenericInterruptView({
     <div className="overflow-hidden rounded-lg border border-gray-200">
       <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-medium text-gray-900">Human Interrupt</h3>
+          <h3 className="font-medium text-gray-900">需要你确认</h3>
         </div>
       </div>
       <motion.div

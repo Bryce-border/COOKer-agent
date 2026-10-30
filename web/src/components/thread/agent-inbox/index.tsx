@@ -72,7 +72,7 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
               {interrupts.map((it, idx) => {
                 const title =
                   it.value?.action_requests?.[0]?.name ??
-                  `Interrupt ${idx + 1}`;
+                  `确认请求 ${idx + 1}`;
                 return (
                   <button
                     key={it.id ?? idx}

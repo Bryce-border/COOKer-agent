@@ -22,7 +22,7 @@ from cooker.ingest.allergens import derive_allergens
 from cooker.ingest.extractor import FactsCache, build_extractor, extract_all
 from cooker.ingest.parser import RecipeFormatError, iter_recipe_files, iter_tip_files, parse_recipe, parse_tip
 from cooker.ingest.schema import Recipe
-from cooker.settings import get_settings
+from cooker.settings import PROJECT_ROOT, get_settings
 
 logger = logging.getLogger("cooker.ingest")
 
@@ -47,7 +47,13 @@ def run(no_llm: bool, limit: int | None, only: list[str] | None, provider: str |
             parsed.append(parse_recipe(path, root))
         except RecipeFormatError as e:
             parse_errors.append({"path": path.relative_to(root).as_posix(), "error": str(e)})
-    tips = [parse_tip(p, root) for p in iter_tip_files(root)]
+    tips_by_id = {t.id: t for t in (parse_tip(p, root) for p in iter_tip_files(root))}
+    # 随项目分发的原创技巧覆盖同名上游文档，保证上游合并前也能入库。
+    local_root = PROJECT_ROOT / "content"
+    for path in iter_tip_files(local_root):
+        tip = parse_tip(path, local_root)
+        tips_by_id[tip.id] = tip
+    tips = list(tips_by_id.values())
     logger.info("规则解析：菜谱 %d 道，失败 %d，技巧 %d 篇", len(parsed), len(parse_errors), len(tips))
 
     targets = [r for r in parsed if not only or r.id in only]

@@ -15,9 +15,9 @@ export async function fileToContentBlock(
 
   if (!supportedFileTypes.includes(file.type)) {
     toast.error(
-      `Unsupported file type: ${file.type}. Supported types are: ${supportedFileTypes.join(", ")}`,
+      `不支持此文件类型：${file.type}。支持的类型： ${supportedFileTypes.join(", ")}`,
     );
-    return Promise.reject(new Error(`Unsupported file type: ${file.type}`));
+    return Promise.reject(new Error(`不支持此文件类型：${file.type}`));
   }
 
   const data = await fileToBase64(file);

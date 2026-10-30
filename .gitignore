@@ -1,6 +1,7 @@
 # 密钥
 api.txt
 .env
+/config/mcd-mcp.local.env
 
 # 项目内工具链 / 缓存 / 模型（体积大、可重新下载）
 tools/
