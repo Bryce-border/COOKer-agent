@@ -14,7 +14,7 @@
 | MCP 工具层（7 个工具，stdio / HTTP） | ✅ 已实现 | `src/cooker/mcp_server/server.py` |
 | LangGraph Agent（ReAct + verify 校验 + 档案记忆 + 人在回路） | ✅ 已实现，已评测（TD-19） | `src/cooker/agent/` |
 | 前端（agent-chat-ui） | ✅ 已接入：流式聊天、菜谱抽屉、购物清单、中断确认、模型切换 | `web/` |
-| 菜谱 HTTP API | ✅ 已实现：详情与本地图片 | `src/cooker/api.py` |
+| 菜谱 HTTP API | ✅ 已实现：详情、本地图片、批量封面（聊天图片卡片） | `src/cooker/api.py` |
 | 技能按需加载 | ✅ 已实现：索引常驻、load_skill 注入正文与工具、read_skill_file（TD-21） | `src/cooker/skills.py`、`skills/` |
 | 麦当劳 MCP 接入 | ✅ 已实现：36 个工具、写操作确认卡 + 台账（TD-22）；真实写操作未在本人账户上执行过 | `src/cooker/mcd/` |
 

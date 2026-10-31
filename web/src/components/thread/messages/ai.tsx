@@ -21,6 +21,7 @@ import {
   isConfirmInterrupt,
 } from "@/components/cooker/confirm-interrupt";
 import { McdConfirm, isMcdConfirm } from "@/components/cooker/mcd-confirm";
+import { RecipeCovers } from "@/components/cooker/recipe-covers";
 
 function CustomComponent({
   message,
@@ -182,6 +183,12 @@ export function AssistantMessage({
               <div className="py-1">
                 <MarkdownText>{linkifyRecipes(contentString)}</MarkdownText>
               </div>
+            )}
+            {contentString.length > 0 && (
+              <RecipeCovers
+                text={contentString}
+                enabled={!(isLoading && isLastMessage)}
+              />
             )}
 
             {!hideToolCalls && (

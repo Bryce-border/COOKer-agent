@@ -54,3 +54,31 @@ def test_resolve_image_rejects_outside(tmp_path):
     assert resolve_image("a.jpg", root) == (root / "a.jpg").resolve()
     assert resolve_image("../secret.jpg", root) is None
     assert resolve_image(str(tmp_path / "secret.jpg"), root) is None  # 绝对路径
+
+
+def test_pick_cover_prefers_finished_photo():
+    from cooker.api import pick_cover
+
+    assert pick_cover("清蒸鲈鱼", ["d/改刀.jpg", "d/摆盘.jpg", "d/清蒸鲈鱼.jpg"]) == "d/清蒸鲈鱼.jpg"
+    assert pick_cover("冬瓜酿肉", ["d/冬瓜形状.jpg", "d/冬瓜酿肉成品.jpg"]) == "d/冬瓜酿肉成品.jpg"
+    assert pick_cover("回锅肉", ["d/1.jpg", "d/2.jpg"]) == "d/1.jpg"  # 无线索时按原文顺序
+    assert pick_cover("某菜", []) is None
+
+
+def test_covers_batch(client, real_store):
+    with_img = next(r.name for r in real_store.recipes if r.images)
+    without = next(r.name for r in real_store.recipes if not r.images)
+    r = client.get("/cooker/covers", params={"names": [with_img, without, "不存在的菜", with_img]})
+    covers = r.json()["covers"]
+    assert r.status_code == 200 and [c["name"] for c in covers] == [with_img]  # 无图、查不到、重复的都不返回
+    assert client.get(covers[0]["image"]).status_code == 200
+
+
+def test_covers_rejects_bad_input(client):
+    assert client.get("/cooker/covers").status_code == 400
+    assert client.get("/cooker/covers", params={"names": [f"菜{i}" for i in range(9)]}).status_code == 400
+
+
+def test_recipe_detail_puts_cover_first(client):
+    images = client.get("/cooker/recipes", params={"name": "清蒸鲈鱼"}).json()["images"]
+    assert images[0].endswith("/清蒸鲈鱼.jpg") and len(images) == 3  # 不是原文第一张「改刀」，且一张不少

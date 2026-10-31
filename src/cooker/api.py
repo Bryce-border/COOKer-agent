@@ -1,6 +1,7 @@
 """挂载在 LangGraph Server 上的自定义 HTTP 路由（langgraph.json → http.app），供前端渲染菜谱卡片。
 
     GET /cooker/recipes?name=可乐鸡翅     菜谱详情（按菜名或 ID，与 Agent 的 get_recipe 同一套查找逻辑）
+    GET /cooker/covers?names=甲&names=乙   批量取封面图（聊天回答下方的菜品图片条用，一条回答一次请求）
     GET /cooker/images/<仓库相对路径>      菜谱图片（只允许 HowToCook/dishes 下的图片文件）
 
 只读、无副作用；用户档案不走这里，前端直接用 LangGraph Server 自带的 /store 接口。
@@ -12,7 +13,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -36,8 +37,49 @@ def recipe_detail(request: Request) -> Response:
         return JSONResponse({"error": str(e), "suggestions": e.suggestions}, status_code=404)
     data = detail.model_dump(mode="json")
     # 本地图片改写为本服务的 URL；外链保持不变
-    data["images"] = [img if img.startswith("http") else f"/cooker/images/{img}" for img in detail.images]
+    # 封面（成品图）放第一张，与聊天里的菜品图片条一致；其余保持原文顺序
+    cover = pick_cover(detail.summary.name, detail.images)
+    ordered = [cover, *(i for i in detail.images if i != cover)] if cover else []
+    data["images"] = [_public_image(img) for img in ordered]
     return JSONResponse(data)
+
+
+MAX_COVER_NAMES = 8
+# 文件名提示「成品」的图优先；HowToCook 的图常按步骤命名（改刀、腌制、1、2…），第一张不一定是成品
+_FINISHED_HINTS = ("成品", "做好", "完成", "成菜", "result", "final")
+
+
+def pick_cover(name: str, images: list[str]) -> str | None:
+    """从一道菜的图片里挑封面：文件名含成品类字样 > 与菜名相同或互相包含 > 摆盘 > 原顺序第一张。"""
+    def score(img: str) -> int:
+        stem = PurePosixPath(img).stem.lower()
+        if any(h in stem for h in _FINISHED_HINTS):
+            return 3
+        if len(stem) >= 2 and (stem in name or name in stem):
+            return 2
+        return 1 if "摆盘" in stem else 0
+
+    # max 遇到同分时保留先出现的那张，即原文中的顺序
+    return max(images, key=score) if images else None
+
+
+def _public_image(img: str) -> str:
+    return img if img.startswith("http") else f"/cooker/images/{img}"
+
+
+def recipe_covers(request: Request) -> Response:
+    names = list(dict.fromkeys(n.strip() for n in request.query_params.getlist("names") if n.strip()))
+    if not names or len(names) > MAX_COVER_NAMES or any(len(n) > 50 for n in names):
+        return JSONResponse({"error": f"参数 names 必填，最多 {MAX_COVER_NAMES} 个，每个不超过 50 字"}, status_code=400)
+    covers = []
+    for n in names:
+        try:
+            detail = get_service().get_recipe(n)
+        except RecipeNotFound:
+            continue  # 回答里的【】偶尔不是库内菜（校验会兜底），这里静默跳过
+        if cover := pick_cover(detail.summary.name, detail.images):
+            covers.append({"query": n, "name": detail.summary.name, "image": _public_image(cover)})
+    return JSONResponse({"covers": covers}, headers={"Cache-Control": "public, max-age=3600"})
 
 
 def resolve_image(rel: str, root: Path) -> Path | None:
@@ -69,5 +111,6 @@ def recipe_image(request: Request) -> Response:
 
 app = Starlette(routes=[
     Route("/cooker/recipes", recipe_detail),
+    Route("/cooker/covers", recipe_covers),
     Route("/cooker/images/{path:path}", recipe_image),
 ])

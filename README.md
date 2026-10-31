@@ -25,7 +25,7 @@
 | 需求 | 示例 | 实现 |
 |---|---|---|
 | 按食材推荐 | 我有土豆、鸡蛋和番茄，能做什么？ | 主料匹配、缺料提示、多样性排序 |
-| 查询做法 | 可乐鸡翅怎么做？ | 原文步骤、可点击菜谱抽屉 |
+| 查询做法 | 可乐鸡翅怎么做？ | 原文步骤、可点击菜谱抽屉；带图的菜在回答下方显示成品图 |
 | 按条件选菜 | 推荐 30 分钟内能做的简单菜 | 结构化筛选、BM25 + 向量 + RRF + 重排 |
 | 换算用量 | 西红柿炒鸡蛋做 4 人份需要多少材料？ | 程序计算结构化用量 |
 | 购物清单 | 西红柿炒鸡蛋和可乐鸡翅，都做 3 人份 | 同名同单位合并、Web 勾选清单 |
@@ -176,7 +176,7 @@ $env:PYTHONUTF8 = "1"
 .\.venv\Scripts\python.exe eval/run_agent_eval.py --repeat 3
 ```
 
-浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-mcd-confirm.mjs` 会调用真实模型和麦当劳只读查询，确认卡上只点「取消」。
+浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-recipe-covers.mjs` 检查菜品图片卡片（不调用模型）；`node scripts/verify-mcd-confirm.mjs` 会调用真实模型和麦当劳只读查询，确认卡上只点「取消」。
 
 默认 pytest 不调用真实模型，依赖本地菜谱的数据测试在文件缺失时会跳过。`live` 和两个评测脚本调用真实 API，会产生费用。检索评测遇到降级会判定结果无效。
 

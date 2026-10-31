@@ -14,6 +14,11 @@ export function linkifyRecipes(text: string): string {
   );
 }
 
+/** 回答里引用的库内菜名（去重，保持出现顺序）。 */
+export function citedRecipes(text: string): string[] {
+  return [...new Set([...text.matchAll(CITE_RE)].map((m) => m[1]))];
+}
+
 export function recipeNameFromHref(href?: string): string | null {
   if (!href?.startsWith(RECIPE_HREF_PREFIX)) return null;
   try {
@@ -63,6 +68,44 @@ export async function fetchRecipe(
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `请求失败（${res.status}）`);
   return data as RecipeDetail;
+}
+
+export interface RecipeCover {
+  query: string; // 回答里写的菜名
+  name: string; // 菜谱库里的正式名
+  image: string;
+}
+
+// 页面级缓存：同一道菜在多条回答里出现时只请求一次；null 表示查过但没有图
+const coverCache = new Map<string, RecipeCover | null>();
+// 请求中的菜名 → 对应的请求。并发调用（多条回答同时渲染、开发模式 effect 执行两次）共用同一个请求
+const pending = new Map<string, Promise<void>>();
+
+/** 批量取封面（GET /cooker/covers，一次最多 8 个），只请求缓存里没有、也不在请求中的菜名。
+ *  共享请求不接受 AbortSignal：一个调用方取消不应让其他调用方失败；调用方自行忽略过期结果。 */
+export async function fetchCovers(
+  apiUrl: string,
+  names: string[],
+): Promise<RecipeCover[]> {
+  const missing = names
+    .filter((n) => !coverCache.has(n) && !pending.has(n))
+    .slice(0, 8);
+  if (missing.length > 0) {
+    const qs = missing.map((n) => `names=${encodeURIComponent(n)}`).join("&");
+    const request = fetch(`${apiUrl}/cooker/covers?${qs}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`封面请求失败（${res.status}）`);
+        const { covers } = (await res.json()) as { covers: RecipeCover[] };
+        missing.forEach((n) => coverCache.set(n, null));
+        covers.forEach((c) => coverCache.set(c.query, c));
+      })
+      .finally(() => missing.forEach((n) => pending.delete(n))); // 失败不写缓存，下次可重试
+    missing.forEach((n) => pending.set(n, request));
+  }
+  await Promise.all(names.map((n) => pending.get(n)));
+  return names
+    .map((n) => coverCache.get(n))
+    .filter((c): c is RecipeCover => !!c);
 }
 
 export function imageUrl(apiUrl: string, src: string): string {
