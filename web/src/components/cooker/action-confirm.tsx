@@ -67,7 +67,7 @@ export function ActionConfirm({ value }: { value: ActionConfirmValue }) {
               alt={img.name}
               title={img.name}
               referrerPolicy="no-referrer"
-              className="h-16 w-16 rounded-md border border-gray-100 bg-gray-50 object-contain"
+              className="h-24 w-24 rounded-md border border-gray-100 bg-gray-50 object-contain"
             />
           ))}
         </div>

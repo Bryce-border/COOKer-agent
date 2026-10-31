@@ -24,8 +24,9 @@ import {
   ActionConfirm,
   isActionConfirm,
 } from "@/components/cooker/action-confirm";
-import { RecipeCovers } from "@/components/cooker/recipe-covers";
-import { ProductImages } from "@/components/cooker/product-images";
+import { useRecipeCovers } from "@/components/cooker/recipe-covers";
+import { turnImages } from "@/lib/cooker";
+import { useMemo } from "react";
 
 function CustomComponent({
   message,
@@ -165,6 +166,21 @@ export function AssistantMessage({
   const hasAnthropicToolCalls = !!anthropicStreamedToolCalls?.length;
   const isToolResult = message?.type === "tool";
 
+  // 配图（菜谱封面 + 本轮工具结果里的商品图）：流式输出结束后才插入，避免页面跳动
+  const imagesEnabled = !isToolResult && contentString.length > 0 && !(isLoading && isLastMessage);
+  const recipeCovers = useRecipeCovers(contentString, imagesEnabled);
+  const products = useMemo(
+    () => (imagesEnabled ? turnImages(thread.messages, message?.id) : []),
+    [imagesEnabled, thread.messages, message?.id],
+  );
+  const inlineImages = useMemo(
+    () =>
+      Object.keys(recipeCovers).length || products.length
+        ? { recipes: recipeCovers, products }
+        : undefined,
+    [recipeCovers, products],
+  );
+
   if (isToolResult && hideToolCalls) {
     return null;
   }
@@ -185,21 +201,10 @@ export function AssistantMessage({
           <>
             {contentString.length > 0 && (
               <div className="py-1">
-                <MarkdownText>{linkifyRecipes(contentString)}</MarkdownText>
+                <MarkdownText images={inlineImages}>
+                  {linkifyRecipes(contentString)}
+                </MarkdownText>
               </div>
-            )}
-            {contentString.length > 0 && (
-              <RecipeCovers
-                text={contentString}
-                enabled={!(isLoading && isLastMessage)}
-              />
-            )}
-            {contentString.length > 0 && (
-              <ProductImages
-                messageId={message?.id}
-                text={contentString}
-                enabled={!(isLoading && isLastMessage)}
-              />
             )}
 
             {!hideToolCalls && (

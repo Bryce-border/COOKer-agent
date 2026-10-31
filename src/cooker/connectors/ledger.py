@@ -110,6 +110,13 @@ class Ledger:
                 "UPDATE actions SET status=?, result=?, updated=? WHERE id=? AND status IN ('IN_FLIGHT','UNKNOWN')",
                 (status, json.dumps({"人工核实": note}, ensure_ascii=False), time.time(), id)).rowcount == 1
 
+    def history(self, account: str, tool: str, limit: int = 10) -> list[dict]:
+        """某账户某个写工具的成功记录（新到旧），result 已解析。用于没有「订单列表」接口的服务。"""
+        with self._db() as db:
+            rows = db.execute("SELECT created, result FROM actions WHERE account=? AND tool=? AND status='SUCCESS' "
+                              "ORDER BY created DESC LIMIT ?", (account, tool, limit)).fetchall()
+        return [{"created": r["created"], "result": json.loads(r["result"]) if r["result"] else None} for r in rows]
+
     def list(self, limit: int = 20) -> list[dict]:
         with self._db() as db:
             rows = db.execute("SELECT id, tool, status, created, result FROM actions "

@@ -152,3 +152,15 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 2024,3000 |
 ## 瑞幸提示门店「打烊中」
 
 - 确认卡会显示门店当前状态（来自 `previewOrder.shopInfo.workStatus`）。打烊时仍可能生成订单但无法出杯，建议换营业中的门店或在营业时间下单。
+
+## 麦当劳 / 瑞幸提示「密钥无效或已过期」或「请求过于频繁」（2026-11-01）
+
+- **原因**：官方 MCP 返回 HTTP 401（Token 无效 / 过期）或 429（麦当劳每个 Token 每分钟最多 600 次）。MCP SDK 只会报 `Server returned an error response`，COOKer 在 httpx 层记录状态码后翻译成上述提示。
+- **处理**：401 到对应开放平台重新获取 Token，更新 `config/mcd-mcp.local.env` 或 `config/luckin-mcp.local.env`；429 稍后再试。
+- **注意**：写操作在请求发出后才出错时，仍按「结果未知」冻结，不会因为看到错误码就判定未执行。
+
+## 改动连接器传输层后，真实调用全部失败（2026-11-01）
+
+- **现象**：离线测试全部通过，真实调用一律「服务暂不可用」。
+- **原因**：自定义 `httpx_client_factory` 的签名不接受 fastmcp 传入的 `follow_redirects` 参数，每次创建客户端都 TypeError。
+- **解决**：工厂签名加 `**_`；`tests/test_connector_client.py` 按 fastmcp 的实际参数调用工厂。改动传输层后务必用真实 Token 跑一次只读查询。

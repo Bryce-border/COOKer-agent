@@ -38,9 +38,10 @@ PREVIEW = {"code": 0, "msg": "success", "success": True, "data": {
     "shopInfo": SHOP,
     "productInfoList": [{**LINE, "name": "生椰拿铁（原创）", "breviaryPicUrl": PIC,
                          "additionDesc": "大杯/冰/意式拼配/默认浓度/不另外加糖/无奶油"}]}}
+# 官方工具文档示例结构：orderId 是 19 位数字（超出 JS 安全整数），另有字符串 orderIdStr
 CREATED = {"code": 0, "msg": "success", "success": True, "data": {
-    "orderId": "LK123", "discountPrice": 16.0,
-    "payOrderQrCodeUrl": "https://pay.example/qr/LK123.png", "payOrderUrl": "https://pay.example/h5/LK123"}}
+    "orderId": 7639308439653908490, "orderIdStr": "7639308439653908490", "discountPrice": 16.0, "needPay": True,
+    "payOrderQrCodeUrl": "https://pay.example/qr/LK123.png", "payOrderUrl": "weixin://wxpay/bizpayurl?pr=xxxx"}}
 # 下单参数：模型给的是用户所在地的粗略坐标、没传券码
 ORDER_ARGS = {"deptId": 390217, "productList": [LINE], "longitude": 121.47, "latitude": 31.23}
 
@@ -49,6 +50,7 @@ class FakeLuckin:
     def __init__(self):
         self.calls: list[tuple[str, dict]] = []
         self.preview = copy.deepcopy(PREVIEW)
+        self.order_status = (10, "待付款")
 
     def server(self) -> FastMCP:
         mcp = FastMCP("fake-luckin")
@@ -80,8 +82,11 @@ class FakeLuckin:
         @mcp.tool(name="queryOrderDetailInfo")
         def detail(orderId: str) -> dict:
             self.calls.append(("queryOrderDetailInfo", {"orderId": orderId}))
-            return {"code": 0, "success": True, "data": {"orderId": orderId, "orderStatusName": "待支付",
-                                                          "deptName": SHOP["deptName"], "discountPrice": 16.0}}
+            code, name = self.order_status
+            return {"code": 0, "success": True, "data": {
+                "orderId": orderId, "orderStatus": code, "orderStatusName": name, "shopInfo": SHOP,
+                "productInfoList": None, "orderPayAmount": 16,
+                "orderCommodityList": [{"commodityName": "生椰拿铁（原创）", "payableMoney": 16, "payMoney": 16}]}}
 
         @mcp.tool(name="cancelOrder")
         def cancel(orderId: str) -> dict:
@@ -97,7 +102,7 @@ class FakeLuckin:
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
     f = FakeLuckin()
-    monkeypatch.setattr(client, "open_transport", lambda conn, creds: f.server())
+    monkeypatch.setattr(client, "open_transport", lambda conn, creds, **kw: f.server())
     monkeypatch.setattr(client, "load_credentials", lambda conn: Credentials(conn.url, TOKEN))
     monkeypatch.setattr(actions, "Ledger", lambda: Ledger(tmp_path / "ledger.sqlite3"))
     monkeypatch.setattr(verify_mod, "_library", lambda: ({}, ()))
@@ -137,7 +142,7 @@ def test_loading_coffee_skill_binds_only_luckin_tools(make_graph):
     state = run(g, "帮我点一杯生椰拿铁")
     assert state["skills"] == ["my-coffee"] and model.skills[-1] == ("my-coffee",)
     names = {t.name for t in active_tools(["my-coffee"])}
-    assert names == LUCKIN.tool_names and not names & MCD.tool_names
+    assert names == LUCKIN.tool_names | {"luckin_recent_orders"} and not names & MCD.tool_names  # 8 个 MCP + 1 个本地
     prompt = next(m.content for m in model.seen[-1] if isinstance(m, SystemMessage))
     assert "瑞幸咖啡下单助手" in prompt and "COOKer 宿主适配" in prompt and "七件事" not in prompt
 
@@ -176,6 +181,7 @@ def test_confirm_passes_coupons_and_store_coordinates(make_graph, fake):
     assert created["couponCodeList"] == ["CPN-1"]  # 模型没传，代码按预览透传
     assert (created["longitude"], created["latitude"]) == (SHOP["longitude"], SHOP["latitude"])  # 门店坐标
     assert result["status"] == "SUCCESS" and result["result"]["payOrderQrCodeUrl"].endswith("LK123.png")
+    assert result["result"]["orderId"] == "7639308439653908490"  # 19 位数字换成字符串，前端解析不丢精度
     assert "payOrderUrl" not in last_tool(state)  # 技能禁止展示的字段已移除
 
 
@@ -204,7 +210,9 @@ def test_cancel_checks_order_first_then_runs_once(make_graph, fake):
     g, _ = make_graph([LOAD, call("cancelOrder", {"orderId": "LK123"}, "c1"), AIMessage("已取消")])
     run(g, "不要了，取消订单 LK123")
     card = g.get_state(CFG).interrupts[0].value
-    assert dict(map(tuple, card["rows"]))["当前状态"] == "待支付" and fake.names() == ["queryOrderDetailInfo"]
+    rows = dict(map(tuple, card["rows"]))
+    assert rows["当前状态"] == "待付款" and rows["金额"] == "¥16.00" and "生椰拿铁" in rows["商品"]
+    assert fake.names() == ["queryOrderDetailInfo"]
     state = run(g, Command(resume={"confirmed": True, "fingerprint": card["fingerprint"]}))
     assert json.loads(last_tool(state))["status"] == "SUCCESS" and fake.names().count("cancelOrder") == 1
 
@@ -234,3 +242,20 @@ def test_product_images_go_to_artifact_not_to_model(make_graph, fake):
 def test_order_card_shows_product_thumbnail(make_graph, fake):
     _, card = order_card(make_graph)
     assert card["images"] == [{"name": "生椰拿铁（原创）", "url": PIC}]
+
+
+def test_cancel_refused_for_finished_order(make_graph, fake):
+    fake.order_status = (80, "已完成")
+    g, _ = make_graph([LOAD, call("cancelOrder", {"orderId": "LK123"}, "c1"), AIMessage("已完成的单不能取消")])
+    state = run(g, "取消订单 LK123")
+    assert json.loads(last_tool(state))["status"] == "REFUSED" and not g.get_state(CFG).interrupts
+    assert "cancelOrder" not in fake.names()
+
+
+def test_recent_orders_come_from_local_ledger(make_graph, fake):
+    g, card = order_card(make_graph, [AIMessage("请扫码支付"), call("luckin_recent_orders", {}, "r1"), AIMessage("最近一单是…")])
+    run(g, Command(resume={"confirmed": True, "fingerprint": card["fingerprint"]}))
+    state = run(g, "帮我看一下最近的订单")
+    orders = json.loads(last_tool(state))["orders"]
+    assert [o["orderId"] for o in orders] == ["7639308439653908490"] and orders[0]["应付"] == "¥16.00"
+    assert fake.names().count("createOrder") == 1  # 查最近订单不调用瑞幸接口

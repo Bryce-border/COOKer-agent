@@ -98,7 +98,7 @@ class FakeMcd:
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
     f = FakeMcd()
-    monkeypatch.setattr(client, "open_transport", lambda conn, creds: f.server())
+    monkeypatch.setattr(client, "open_transport", lambda conn, creds, **kw: f.server())
     monkeypatch.setattr(client, "load_credentials", lambda conn: Credentials(conn.url, TOKEN))
     monkeypatch.setattr(actions, "Ledger", lambda: Ledger(tmp_path / "ledger.sqlite3"))
     monkeypatch.setattr(verify_mod, "_library", lambda: ({}, ()))  # 本文件不测菜名校验

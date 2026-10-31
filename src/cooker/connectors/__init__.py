@@ -18,7 +18,7 @@ def all_connectors() -> tuple[Connector, ...]:
     from cooker.mcd.connector import CONNECTOR as MCD
 
     conns = (MCD, LUCKIN)
-    names = [n for c in conns for n in c.tool_names]
+    names = [n for c in conns for n in c.tool_names] + [t.name for c in conns for t in c.local_tools(c)]
     assert len(names) == len(set(names)), "不同连接器的工具重名，ToolNode 会无法区分"
     return conns
 
@@ -27,5 +27,8 @@ def by_key(key: str) -> Connector:
     return next(c for c in all_connectors() if c.key == key)
 
 
+@lru_cache
 def connector_tool_names() -> frozenset[str]:
-    return frozenset(n for c in all_connectors() for n in c.tool_names)
+    """全部外部服务工具名（含宿主本地工具）。"""
+    local = [t.name for c in all_connectors() for t in c.local_tools(c)]
+    return frozenset([*(n for c in all_connectors() for n in c.tool_names), *local])

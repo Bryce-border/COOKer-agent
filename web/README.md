@@ -36,8 +36,7 @@ pnpm dev --hostname 127.0.0.1 --port 3000
 - 历史列表的删除按钮需要二次确认；失败会保留对话。删除当前对话后返回新对话，不清除长期偏好。
 - 历史加载失败时点击「重新加载对话」；加载中及失败时暂停发送，避免向未恢复的会话继续提交。
 - 工具调用显示中文摘要，展开查看详情；购物清单可勾选。
-- 回答结束后，回答中带图的菜（【菜名】）在下方显示成品图卡片，点击打开菜谱抽屉（`components/cooker/recipe-covers.tsx`）。
-- 麦当劳 / 瑞幸：回答中提到的商品在下方显示官方商品图（取自工具消息的 `artifact.images`，`components/cooker/product-images.tsx`）；确认卡带缩略图。
+- 回答结束后，图片插到对应信息旁（`lib/inline-images.ts` rehype 插件，列表图 96px、行内图 56px，商品图点击放大）：列表项第一个提到的菜 / 商品有图时改为左图右文卡片，表格、段落、标题在名称前插小图。菜谱封面来自 `useRecipeCovers`（点击图片打开抽屉），商品图来自工具消息的 `artifact.images`；确认卡带缩略图。
 - 过敏原移除请求暂停对话，确认或取消后恢复。
 - 麦当劳、瑞幸写操作（下单、兑换、抽奖、领券、取消等）在对话中显示确认卡（`components/cooker/action-confirm.tsx`），确认时把卡片指纹带回后端；后端发现实时信息变化会拒绝执行。
 - Web 会话默认共享 local 档案；CLI 的偏好保存在另一套存储中。
@@ -73,8 +72,8 @@ try {
 前后端启动后，使用本机 Edge 执行浏览器回归：
 
 ```powershell
-node scripts/verify-recipe-covers.mjs # 菜品图片卡片，预置会话，不调用模型
-node scripts/verify-product-images.mjs [--real|--real-mcd] # 外部服务商品图；默认预置会话不调用模型
+node scripts/verify-recipe-covers.mjs # 菜谱配图位置，预置会话，不调用模型
+node scripts/verify-product-images.mjs [--real|--real-mcd] # 商品图位置；默认预置会话不调用模型
 node scripts/verify-action-confirm.mjs mcd     # 真实模型 + 麦当劳只读查询，确认卡只点「取消」
 node scripts/verify-action-confirm.mjs luckin  # 同上，瑞幸下单确认卡
 node scripts/verify-conversations.mjs

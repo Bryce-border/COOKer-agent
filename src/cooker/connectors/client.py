@@ -19,6 +19,7 @@ from typing import Any
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from jsonschema import ValidationError, validate
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 from cooker.connectors.base import Connector, ConnectorError, Credentials, Unknown
 from cooker.connectors.images import strip_images
@@ -37,9 +38,26 @@ def account_key(conn: Connector, creds: Credentials) -> str:
     return conn.key + ":" + hashlib.sha256(creds.token.encode()).hexdigest()[:16]
 
 
-def open_transport(conn: Connector, creds: Credentials) -> Any:
-    """测试时替换为内存中的假服务（FastMCP 实例），走同一套 MCP 协议。"""
-    return StreamableHttpTransport(creds.url, auth=creds.token)
+# 官方文档的错误码（麦当劳：401 Token 无效或过期、429 超过 600 次/分钟）。MCP SDK 会把 HTTP 状态吞成
+# JSON-RPC -32603「Server returned an error response」，所以在 httpx 层用响应钩子自己记下状态码
+HTTP_HINTS = {401: "密钥无效或已过期：请到{label} MCP 开放平台重新获取 Token，更新本机 {env_file}",
+              403: "密钥没有访问权限：请到{label} MCP 开放平台检查 Token 状态",
+              429: "{label}接口请求过于频繁，已被限流，请稍后再试"}
+
+
+def open_transport(conn: Connector, creds: Credentials, *, statuses: list[int] | None = None) -> Any:
+    """statuses：收集本次会话里所有 HTTP 错误状态码。测试时整体替换为内存中的假服务（FastMCP 实例）。"""
+    # fastmcp 调用工厂时还会传 follow_redirects 等参数：用 **_ 接住（create_mcp_http_client 默认已开启跟随重定向）
+    def factory(headers=None, timeout=None, auth=None, **_):
+        http = create_mcp_http_client(headers=headers, timeout=timeout, auth=auth)
+        if statuses is not None:
+            async def record(response):
+                if response.status_code >= 400:
+                    statuses.append(response.status_code)
+            http.event_hooks["response"].append(record)
+        return http
+
+    return StreamableHttpTransport(creds.url, auth=creds.token, httpx_client_factory=factory)
 
 
 async def _discard_log(*args, **kwargs) -> None:
@@ -57,9 +75,10 @@ async def call(conn: Connector, name: str, arguments: dict | None = None, *, wri
     arguments = arguments or {}
     creds = await asyncio.to_thread(load_credentials, conn)  # 读配置文件是阻塞 IO，移出事件循环
     dispatched = False
+    statuses: list[int] = []
     try:
         async with asyncio.timeout(CALL_TIMEOUT):
-            async with Client(open_transport(conn, creds), timeout=25, init_timeout=15,
+            async with Client(open_transport(conn, creds, statuses=statuses), timeout=25, init_timeout=15,
                               log_handler=_discard_log) as client:
                 live = {t.name: t for t in await client.list_tools()}
                 if name not in live:
@@ -73,9 +92,11 @@ async def call(conn: Connector, name: str, arguments: dict | None = None, *, wri
     except ConnectorError:
         raise
     except Exception:
-        if dispatched:
+        if dispatched:  # 写请求已发出：哪怕看到错误码也不能证明没执行，保守地按「结果未知」处理
             raise Unknown(f"请求已发出但未收到确定结果（超时或断连）。不能确认是否已执行，已冻结{conn.label}的后续写操作；"
                           f"请在{conn.app_hint}核对订单与记录，切勿重复提交。") from None
+        if hint := next((HTTP_HINTS[c] for c in statuses if c in HTTP_HINTS), None):
+            raise ConnectorError(hint.format(label=conn.label, env_file=conn.env_file)) from None
         raise ConnectorError(f"{conn.label}服务暂不可用：请检查网络、密钥是否过期，或稍后重试") from None
     if result.is_error:
         text = _text(result)

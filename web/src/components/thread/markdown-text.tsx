@@ -14,6 +14,8 @@ import { TooltipIconButton } from "@/components/thread/tooltip-icon-button";
 import { cn } from "@/lib/utils";
 import { recipeNameFromHref } from "@/lib/cooker";
 import { useRecipeSheet } from "@/components/cooker/recipe-sheet";
+import { InlineImageSet, rehypeInlineImages } from "@/lib/inline-images";
+import { ImageLightbox } from "@/components/cooker/image-lightbox";
 
 import "katex/dist/katex.min.css";
 
@@ -61,6 +63,88 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
     </div>
   );
 };
+
+// 图片：rehypeInlineImages 插入的配图（data-inline-image），或回答里本来的 Markdown 图片（如瑞幸支付二维码）
+function MarkdownImage({
+  src,
+  alt,
+  className,
+  ...props
+}: {
+  src?: string;
+  alt?: string;
+  className?: string;
+  "data-inline-image"?: "media" | "inline";
+  "data-image-kind"?: "recipe" | "product";
+  "data-recipe"?: string;
+}) {
+  const sheet = useRecipeSheet();
+  const [zoom, setZoom] = useState(false);
+  const variant = props["data-inline-image"];
+  const recipe = props["data-recipe"];
+  if (!variant) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className={cn("my-2 max-h-64 max-w-[16rem] rounded-lg border border-gray-200", className)}
+      />
+    );
+  }
+  const fit = props["data-image-kind"] === "product" ? "object-contain bg-gray-50" : "object-cover";
+  const img = (
+    <img
+      src={src}
+      alt={alt}
+      title={alt}
+      loading="lazy"
+      referrerPolicy="no-referrer" // 外部图床不带本机页面地址
+      data-testid="inline-image"
+      className={cn(
+        "rounded-lg border border-gray-100",
+        // 列表卡片 96px；表格 / 段落里 56px（原 64px / 28px 看不清）
+        variant === "media" ? "h-24 w-24 shrink-0" : "mr-1.5 inline-block h-14 w-14 align-middle",
+        fit,
+      )}
+    />
+  );
+  const wrap = variant === "media" ? "shrink-0" : "inline align-middle";
+  // 菜谱图：点击与菜名按钮一样打开菜谱抽屉
+  if (recipe && sheet) {
+    return (
+      <button
+        type="button"
+        onClick={() => sheet.openRecipe(recipe)}
+        className={wrap}
+        aria-label={`查看「${recipe}」做法`}
+      >
+        {img}
+      </button>
+    );
+  }
+  // 商品图：点击放大
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setZoom(true)}
+        className={cn(wrap, "cursor-zoom-in")}
+        aria-label={`放大「${alt}」图片`}
+      >
+        {img}
+      </button>
+      {zoom && src && (
+        <ImageLightbox
+          src={src}
+          alt={alt ?? ""}
+          onClose={() => setZoom(false)}
+        />
+      )}
+    </>
+  );
+}
 
 // 【菜名】被 linkifyRecipes 改写成 #recipe: 链接 → 渲染为打开菜谱抽屉的按钮；其它链接保持原样
 function RecipeAwareLink({
@@ -157,6 +241,7 @@ const defaultComponents: any = {
     />
   ),
   a: RecipeAwareLink,
+  img: MarkdownImage,
   blockquote: ({ className, ...props }: { className?: string }) => (
     <blockquote
       className={cn("border-l-2 pl-6 italic", className)}
@@ -273,12 +358,15 @@ const defaultComponents: any = {
   },
 };
 
-const MarkdownTextImpl: FC<{ children: string }> = ({ children }) => {
+const MarkdownTextImpl: FC<{ children: string; images?: InlineImageSet }> = ({
+  children,
+  images,
+}) => {
   return (
     <div className="markdown-content">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[rehypeKatex, [rehypeInlineImages, images]]}
         components={defaultComponents}
       >
         {children}

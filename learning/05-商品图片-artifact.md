@@ -1,5 +1,7 @@
 # 麦当劳 / 瑞幸商品图：一步一步怎么做的
 
+> **2026-11-01 更新**：展示位置已改为就地展示（`learning/06`）；`product-images.tsx` 与 `mentionedImages` 已删除，名称匹配移入 rehype 插件。artifact、白名单、去掉给模型的图片地址等后端设计不变。
+
 > 2026-11-01。设计结论：`docs/technical-decisions.md` TD-25；开发记录：`docs/development-2026-11-01.md`。
 > 前置阅读：`learning/03-聊天中显示菜品图片.md`（菜谱图「代码取图、模型不输出图片」的思路）、`learning/04-瑞幸技能接入-逐步实现.md`（连接器）。
 > 标注：**已验证** = 本次实际跑过。

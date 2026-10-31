@@ -133,14 +133,6 @@ export function turnImages(messages: AnyMessage[], messageId?: string): ProductI
   return [...seen.values()];
 }
 
-/** 只保留回答里提到的商品。名称后缀括号常被省略（「生椰拿铁（原创）」→「生椰拿铁」），两种写法都算。 */
-export function mentionedImages(text: string, images: ProductImage[]): ProductImage[] {
-  return images.filter((img) => {
-    const base = img.name.replace(/[（(][^）)]*[）)]\s*$/, "").trim();
-    return text.includes(img.name) || (base.length >= 2 && text.includes(base));
-  });
-}
-
 export function imageUrl(apiUrl: string, src: string): string {
   return src.startsWith("http") ? src : `${apiUrl}${src}`;
 }

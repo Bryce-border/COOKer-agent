@@ -52,7 +52,7 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
 
 普通消息由 LangGraph SDK 提交，运行上下文传入模型 provider。菜名引用转为可点击按钮，打开抽屉后通过 `GET /cooker/recipes?name=...` 读取原文，本地图片走 `/cooker/images/...`。这些读取不调用 LLM。
 
-回答流式输出结束后，前端提取【菜名】，用 `GET /cooker/covers?names=...` 批量取封面，在回答下方显示成品图（无图的菜跳过，结果在页面内缓存）。
+回答流式输出结束后，前端提取【菜名】，用 `GET /cooker/covers?names=...` 批量取封面，插到对应菜名所在的列表项（左图右文）或菜名前（无图的菜跳过，结果在页面内缓存）。
 
 抽屉中的换算按钮会发送新的聊天消息，由 Agent 调用换算工具；过敏原确认按钮通过 `Command(resume=...)` 恢复同一会话。完整启动步骤见 [README](../README.md)。
 
@@ -74,6 +74,6 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
 
 瑞幸同一流程：`load_skill("my-coffee")` 后绑定 8 个工具；`createOrder` 的确认卡由实时 `previewOrder` 生成，券码与门店坐标由代码写进最终参数。
 
-外部服务的读工具返回 `(content, artifact)`：content（已删去图片地址）给模型，artifact 里的商品图 `[{name, url}]` 由前端在回答下方显示（只显示回答中提到的商品）。
+外部服务的读工具返回 `(content, artifact)`：content（已删去图片地址）给模型，artifact 里的商品图 `[{name, url}]` 由前端在渲染 Markdown 时插到提到该商品的列表项 / 单元格 / 段落旁（`web/src/lib/inline-images.ts`）。
 
 结果未知（UNKNOWN）会冻结该服务账户的所有写操作（麦当劳与瑞幸互不影响），直到本人用 `python -m cooker.connectors.ledger resolve` 解冻。

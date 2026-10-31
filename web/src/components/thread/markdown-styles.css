@@ -43,3 +43,38 @@
 .markdown-content tr:nth-child(even) {
   background-color: #f9f9f9;
 }
+
+/* 配图列表项：左图右文（rehypeInlineImages 给第一次提到某道菜 / 商品的 li 加上 .cooker-media） */
+.markdown-content li.cooker-media {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0.5rem 0 0.5rem -1.25rem;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* 同一列表里没配图的项：同样的卡片样式，文字与有图项的正文左对齐 */
+.markdown-content .cooker-media-list > li:not(.cooker-media) {
+  list-style: none;
+  margin: 0.5rem 0 0.5rem -1.25rem;
+  padding: 0.5rem 0.5rem 0.5rem 7.25rem; /* 6rem 图片 + 0.75rem 间距 + 0.5rem 内边距 */
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.markdown-content li.cooker-media > .cooker-media-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.markdown-content li.cooker-media > .cooker-media-body > p {
+  margin: 0;
+}
+
+/* 表格里的配图：名称与小图同一行 */
+.markdown-content td img[data-inline-image="inline"] {
+  margin-top: -0.15rem;
+}

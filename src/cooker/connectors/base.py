@@ -86,6 +86,8 @@ class Connector:
     business_error: Callable[[Any], str | None] = default_business_error
     # 交给模型前的服务特有处理（单位换算、去掉不该展示的字段），返回新的 payload
     present: Callable[[str, Any], Any] = keep
+    # 宿主提供的本地工具（不经过 MCP），随技能一起绑定，如瑞幸「最近订单」读本地台账
+    local_tools: Callable[["Connector"], list] = lambda conn: []
 
     def __post_init__(self):
         assert set(self.cards) == set(self.write_tools), f"{self.key}: 每个写工具都必须有确认卡"

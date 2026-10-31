@@ -7,12 +7,19 @@
 - 预览明细必须与下单一致 → 不一致直接拒绝，不弹卡；
 - 禁止展示 payOrderUrl → 交给模型前删除。
 2026-10-31 实测：金额字段单位是「元」（如 20.0）；门店 workStatus 例如「打烊中」。
+2026-11-01 据官方工具文档补充：订单状态码、orderPayAmount、19 位数字 orderId（另有字符串 orderIdStr）、needPay。
 """
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+from langchain_core.tools import BaseTool, tool
+from langgraph.prebuilt import ToolRuntime
+from pydantic import Field
 
 from cooker.connectors.actions import read
 from cooker.connectors.base import Card, Connector, Refuse
@@ -23,6 +30,8 @@ WRITE_TOOLS = frozenset({"createOrder", "cancelOrder"})
 READ_TOOLS = frozenset({"queryShopList", "searchProductForMcp", "switchProduct", "queryProductDetailInfo",
                         "previewOrder", "queryOrderDetailInfo"})
 HIDDEN_FIELDS = ("payOrderUrl",)  # 技能要求只展示 payOrderQrCodeUrl
+# queryOrderDetailInfo.orderStatus（官方文档）
+ORDER_STATUS = {10: "待付款", 20: "下单成功", 30: "制作中", 60: "等待取餐", 80: "已完成", 100: "已取消"}
 
 
 def _money(v: Any) -> str:
@@ -76,24 +85,24 @@ async def _create_order(conn: Connector, a: dict) -> Card:
     return Card("确认瑞幸下单", rows, warnings, facts=facts, args=final, images=images)
 
 
-def _pick(d: dict, *keys: str) -> Any:
-    """订单详情字段名尚未用真实订单核对：按常见命名依次尝试，取不到就显示「数据缺失」。"""
-    for k in keys:
-        for src in (d, d.get("shopInfo") or {}):
-            if src.get(k) not in (None, ""):
-                return src[k]
-    return None
-
-
 async def _cancel_order(conn: Connector, a: dict) -> Card:
+    """字段名来自官方工具文档（尚未用真实订单核对）：orderStatus / orderStatusName / orderPayAmount / orderCommodityList。"""
     d = await read(conn, "queryOrderDetailInfo", {"orderId": a["orderId"]})
     d = d if isinstance(d, dict) else {}
-    status = _pick(d, "orderStatusName", "statusName", "orderStatusDesc", "orderStatus", "status")
-    rows = [("订单号", str(a["orderId"])),
-            ("当前状态", str(status) if status is not None else "数据缺失"),
-            ("门店", str(_pick(d, "deptName", "shopName") or "数据缺失")),
-            ("金额", _money(_pick(d, "discountPrice", "payMoney", "totalPrice")))]
-    return Card("确认取消瑞幸订单", rows, ["已支付订单能否取消、退款何时到账以瑞幸官方为准"], facts={"status": status})
+    code = d.get("orderStatus")
+    status = d.get("orderStatusName") or ORDER_STATUS.get(code) or "数据缺失"
+    if code in (80, 100):
+        raise Refuse(f"订单当前状态为「{status}」，不能取消")
+    goods = [f"{c.get('commodityName')} ¥{c.get('payMoney')}" for c in d.get("orderCommodityList") or []]
+    goods = goods or [f"{p.get('name')} × {p.get('amount')}" for p in d.get("productInfoList") or []]
+    rows = [("订单号", str(a["orderId"])), ("当前状态", str(status)),
+            ("门店", str((d.get("shopInfo") or {}).get("deptName") or "数据缺失")),
+            ("商品", "\n".join(goods) or "数据缺失"),
+            ("金额", _money(d.get("orderPayAmount")))]
+    warnings = ["已支付订单能否取消、退款何时到账以瑞幸官方为准"]
+    if code in (30, 60):
+        warnings.insert(0, f"订单已「{status}」，门店可能无法取消")
+    return Card("确认取消瑞幸订单", rows, warnings, facts={"status": code, "name": status})
 
 
 def _drop_hidden(value: Any) -> Any:
@@ -104,8 +113,44 @@ def _drop_hidden(value: Any) -> Any:
     return value
 
 
+def _string_order_id(payload: Any) -> Any:
+    """createOrder 的 orderId 是 19 位数字，超出 JavaScript 安全整数（2^53），前端解析会丢精度；改用官方给的 orderIdStr。"""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if isinstance(data, dict) and data.get("orderIdStr"):
+        return {**payload, "data": {**data, "orderId": str(data["orderIdStr"])}}
+    return payload
+
+
 def present(name: str, payload: Any) -> Any:
+    if name == "createOrder":
+        payload = _string_order_id(payload)
     return _drop_hidden(payload) if name in ("createOrder", "queryOrderDetailInfo") else payload
+
+
+def _local_tools(conn: Connector) -> list[BaseTool]:
+    """瑞幸没有「订单列表」接口：通过 COOKer 下的单都记在台账里，从台账读最近订单号（只读，不调接口）。"""
+    from cooker.connectors import actions, client
+    from cooker.connectors.tools import skill_guard
+
+    @tool  # 同步函数：读本地 SQLite，CLI（invoke）与 Server（ainvoke，放进线程池）都能用
+    def luckin_recent_orders(runtime: ToolRuntime,
+                                   limit: Annotated[int, Field(ge=1, le=10)] = 5) -> str:
+        """列出最近通过 COOKer 创建的瑞幸订单（订单号、下单时间、应付金额），用于「看看最近的订单」。
+        只包含本机经 COOKer 下的单，不含瑞幸 App 里的订单；查看状态与取餐码请再用 queryOrderDetailInfo。"""
+        if refused := skill_guard(conn, runtime):
+            return refused
+        # 与 run_write 用同一个台账入口（actions.Ledger），写入与读取一定是同一个文件
+        rows = actions.Ledger().history(client.account_key(conn, client.load_credentials(conn)), "createOrder", limit)
+        orders = []
+        for r in rows:
+            data = (r["result"] or {}).get("data") or {}
+            orders.append({"orderId": str(data.get("orderIdStr") or data.get("orderId") or ""),
+                           "下单时间": time.strftime("%Y-%m-%d %H:%M", time.localtime(r["created"])),
+                           "应付": _money(data.get("discountPrice"))})
+        note = "仅含本机经 COOKer 下的单" if orders else "本机还没有经 COOKer 下过瑞幸订单；瑞幸 App 里的订单请提供订单号查询"
+        return json.dumps({"orders": orders, "note": note}, ensure_ascii=False)
+
+    return [luckin_recent_orders]
 
 
 CONNECTOR = Connector(
@@ -114,5 +159,5 @@ CONNECTOR = Connector(
     read_tools=READ_TOOLS, write_tools=WRITE_TOOLS, app_hint="瑞幸咖啡 App",
     image_hosts=frozenset({"luckincoffeecdn.com"}),
     cards={"createOrder": _create_order, "cancelOrder": _cancel_order},
-    present=present,
+    present=present, local_tools=_local_tools,
 )

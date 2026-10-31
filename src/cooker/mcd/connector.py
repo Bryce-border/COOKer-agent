@@ -92,6 +92,8 @@ async def _cancel_order(conn: Connector, a: dict) -> Card:
     d = await read(conn, "query-order", {"orderId": a["orderId"]})
     detail = d.get("orderDetail", d) if isinstance(d, dict) else {}
     status = detail.get("orderStatus", "数据缺失")
+    if status in ("订单已完成", "订单已取消"):  # 官方文档中的状态取值
+        raise Refuse(f"订单当前状态为「{status}」，不能取消")
     warnings = [] if status == "待支付" else ["订单已不是「待支付」：能否取消、退款何时到账以麦当劳官方为准"]
     return Card("确认取消订单", [
         ("订单号", str(a["orderId"])), ("当前状态", str(status)),

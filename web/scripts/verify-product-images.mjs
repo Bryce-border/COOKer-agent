@@ -1,5 +1,5 @@
 // 商品图片条的浏览器回归（麦当劳、瑞幸工具结果里的商品图）。
-// 默认：预置会话（不调用模型）——工具消息带 artifact.images，回答提到其中一件商品，检查只显示被提到的那件且图片真实加载。
+// 默认：预置会话（不调用模型）——工具消息带 artifact.images；检查商品图出现在提到它的表格单元格 / 段落里、每件只配一次、未提到的不显示。
 // --real：真实模型 + 真实瑞幸只读查询；--real-mcd：真实模型 + 麦当劳抽奖奖品（只读）。会产生模型费用，不下单、不抽奖。
 // 前置：本机已启动 langgraph dev(:2024) 与前端(:3000)。用法（web 目录）：node scripts/verify-product-images.mjs [--real|--real-mcd] [截图目录]
 import { chromium, expect } from '@playwright/test';
@@ -29,20 +29,37 @@ try {
       { type: 'human', id: randomUUID(), content: '商品图片回归测试' },
       { type: 'ai', id: randomUUID(), content: '', tool_calls: [call] },
       { type: 'tool', id: randomUUID(), tool_call_id: call.id, name: call.name, content: '{"code":0}',
-        artifact: { images: [{ name: '生椰拿铁（原创）', url: pic }, { name: '未被提到的商品', url: pic + '?x' }] } },
+        artifact: { images: [{ name: '生椰拿铁（原创）', url: pic }, { name: '橙C美式', url: pic + '?b' }, { name: '未被提到的商品', url: pic + '?x' }] } },
       // verify 重答时插入的隐藏校验消息：取图时不能把它当成新一轮的开始
       { type: 'human', id: 'do-not-render-verify-test', content: '【系统校验】…' },
-      { type: 'ai', id: randomUUID(), content: '这家店有**生椰拿铁**，默认大杯冰。' }] }, asNode: 'verify' });
+      { type: 'ai', id: randomUUID(), content: [
+        '这家店有**生椰拿铁**，默认大杯冰。', '',
+        '| 商品 | 价格 |', '|---|---|', '| 橙C美式 | ¥19 |', '',
+        '再说一次生椰拿铁。'].join('\n') }] }, asNode: 'verify' });
     await page.goto(`http://localhost:3000/?threadId=${threadId}`);
   }
   if (real) await expect(page).toHaveURL(/threadId=/, { timeout: 60000 });
   threadId ??= new URL(page.url()).searchParams.get('threadId');
-  const strip = page.getByTestId('product-images');
-  await expect(strip).toBeVisible({ timeout: 180000 });
-  const imgs = strip.getByRole('img');
-  if (!real) await expect(imgs).toHaveCount(1);  // 只显示回答里提到的商品（括号后缀省略也能匹配）
-  await expect.poll(() => imgs.first().evaluate(el => el.naturalWidth), { timeout: 30000 }).toBeGreaterThan(0);
-  const names = await strip.locator('figcaption').allTextContents();
+  const thumbs = page.getByTestId('inline-image');
+  await expect(thumbs.first()).toBeVisible({ timeout: 180000 });
+  if (!real) {
+    await expect(thumbs).toHaveCount(2);  // 生椰拿铁提到两次只配一张；未提到的商品不显示
+    await expect(page.locator('p', { hasText: '这家店有' }).getByRole('img', { name: '生椰拿铁（原创）' })).toBeVisible();  // 括号后缀省略也能匹配
+    await expect(page.locator('td', { hasText: '橙C美式' }).getByRole('img', { name: '橙C美式' })).toBeVisible();
+  }
+  await expect.poll(() => thumbs.first().evaluate(el => el.naturalWidth), { timeout: 30000 }).toBeGreaterThan(0);
+  const names = await thumbs.evaluateAll(els => els.map(e => e.getAttribute('alt')));
+  // 尺寸足够看清（行内 ≥ 48px），点击放大、Esc 关闭
+  const box = await thumbs.first().boundingBox();
+  if (!box || box.width < 48) throw new Error(`商品图太小：${box?.width}px`);
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${shots}/product-images${realMcd ? '-real-mcd' : real ? '-real' : ''}.png` });
+  await thumbs.first().click();
+  const lightbox = page.getByTestId('image-lightbox');
+  await expect(lightbox).toBeVisible();
+  await page.screenshot({ path: `${shots}/product-images-zoom.png` });
+  await page.keyboard.press('Escape');
+  await expect(lightbox).toHaveCount(0);
   await page.waitForTimeout(1000);
   await page.screenshot({ path: `${shots}/product-images${realMcd ? '-real-mcd' : real ? '-real' : ''}.png` });
   if (errors.length) throw new Error('页面错误：' + errors.join(' | '));

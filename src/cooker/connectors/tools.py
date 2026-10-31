@@ -30,8 +30,8 @@ def _make(conn: Connector, name: str, spec: dict) -> BaseTool:
     writing = name in conn.write_tools
 
     async def arun(runtime: ToolRuntime, **kwargs) -> tuple[str, dict | None]:
-        if conn.skill not in ((runtime.state or {}).get("skills") or []):
-            return json.dumps({"error": f"请先调用 load_skill 加载「{conn.skill}」技能"}, ensure_ascii=False), None
+        if refused := skill_guard(conn, runtime):
+            return refused, None
         try:
             if writing:
                 return await actions.run_write(conn, name, kwargs, runtime.tool_call_id), None
@@ -51,5 +51,12 @@ def _make(conn: Connector, name: str, spec: dict) -> BaseTool:
     )
 
 
+def skill_guard(conn: Connector, runtime: ToolRuntime) -> str | None:
+    """未加载对应技能时的拒绝消息；已加载返回 None。本地工具也要用。"""
+    if conn.skill in ((runtime.state or {}).get("skills") or []):
+        return None
+    return json.dumps({"error": f"请先调用 load_skill 加载「{conn.skill}」技能"}, ensure_ascii=False)
+
+
 def make_tools(conn: Connector) -> list[BaseTool]:
-    return [_make(conn, name, spec) for name, spec in sorted(conn.schemas.items())]
+    return [*(_make(conn, name, spec) for name, spec in sorted(conn.schemas.items())), *conn.local_tools(conn)]
