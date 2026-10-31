@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { useStreamContext } from "@/providers/Stream";
 import { useProvider } from "./provider-select";
 
-/** 后端 cooker.mcd.actions.run_write 发出的 interrupt：麦当劳写操作确认卡。
+/** 后端 cooker.connectors.actions.run_write 发出的 interrupt：外部服务（麦当劳、瑞幸）写操作确认卡。
  *  卡片内容（金额、消耗、订单状态）由后端用实时查询生成，不是模型写的文字。 */
-export interface McdConfirmValue {
-  type: "mcd_confirm";
+export interface ActionConfirmValue {
+  type: "action_confirm";
+  connector: string;
   tool: string;
   title: string;
   rows: [string, string][];
@@ -16,20 +17,21 @@ export interface McdConfirmValue {
   fingerprint: string;
 }
 
-export function isMcdConfirm(v: unknown): v is McdConfirmValue {
+export function isActionConfirm(v: unknown): v is ActionConfirmValue {
   const o = v as Record<string, unknown> | null;
   return (
     typeof o === "object" &&
     o !== null &&
-    o.type === "mcd_confirm" &&
+    o.type === "action_confirm" &&
     Array.isArray(o.rows) &&
     typeof o.fingerprint === "string"
   );
 }
 
-const EMPHASIS = new Set(["实付", "本次消耗"]);
+const EMPHASIS = new Set(["实付", "应付", "本次消耗"]);
+const ICONS: Record<string, string> = { mcd: "🍟", luckin: "☕" };
 
-export function McdConfirm({ value }: { value: McdConfirmValue }) {
+export function ActionConfirm({ value }: { value: ActionConfirmValue }) {
   const stream = useStreamContext();
   const [provider] = useProvider();
   const [sent, setSent] = useState<"confirm" | "cancel" | null>(null);
@@ -49,10 +51,10 @@ export function McdConfirm({ value }: { value: McdConfirmValue }) {
   return (
     <div
       className="w-full max-w-md overflow-hidden rounded-xl border border-amber-300 bg-white shadow-sm"
-      data-testid="mcd-confirm"
+      data-testid="action-confirm"
     >
       <div className="flex items-center gap-2 bg-amber-400 px-4 py-2 text-sm font-semibold text-amber-950">
-        <span aria-hidden>🍟</span>
+        <span aria-hidden>{ICONS[value.connector] ?? "⚠️"}</span>
         {value.title}
       </div>
       <dl className="divide-y divide-gray-100 px-4 text-sm">

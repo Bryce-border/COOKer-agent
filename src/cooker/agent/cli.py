@@ -70,7 +70,7 @@ def run_turn(graph, payload, config, context: Context, out=sys.stdout) -> list:
 
 def ask(value: dict):
     """把 interrupt 的内容展示给用户，返回 resume 值。"""
-    if value.get("type") == "mcd_confirm":  # 麦当劳写操作确认卡（cooker.mcd.actions）
+    if value.get("type") == "action_confirm":  # 外部服务写操作确认卡（cooker.connectors.actions）
         print(f"\n[{value['title']}]")
         for label, text in value["rows"]:
             print(f"  {label}：{text}")

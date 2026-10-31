@@ -167,9 +167,25 @@ const MCD_LABELS: Record<string, string> = {
   "delivery-create-address": "新增地址（需确认）",
 };
 
+// 瑞幸 MCP 工具（见 src/cooker/luckin/tool_schemas.json）
+const LUCKIN_LABELS: Record<string, string> = {
+  queryShopList: "找瑞幸门店",
+  searchProductForMcp: "搜索瑞幸商品",
+  queryProductDetailInfo: "看商品规格",
+  switchProduct: "切换规格",
+  previewOrder: "预览订单",
+  queryOrderDetailInfo: "查瑞幸订单",
+  createOrder: "瑞幸下单（需确认）",
+  cancelOrder: "取消瑞幸订单（需确认）",
+};
+
 export function describeToolCall(name: string, args: Record<string, unknown>): string {
   const meta = TOOL_LABELS[name];
-  if (!meta) return MCD_LABELS[name] ? `🍟 ${MCD_LABELS[name]}` : `🔧 ${name}`;
+  if (!meta) {
+    if (MCD_LABELS[name]) return `🍟 ${MCD_LABELS[name]}`;
+    if (LUCKIN_LABELS[name]) return `☕ ${LUCKIN_LABELS[name]}`;
+    return `🔧 ${name}`;
+  }
   let detail = "";
   if (meta.arg && args[meta.arg] !== undefined) {
     const v = args[meta.arg];

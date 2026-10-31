@@ -20,9 +20,10 @@ from langgraph.types import Command
 from cooker.agent import graph as graph_mod
 from cooker.agent import verify as verify_mod
 from cooker.agent.tools import Context
-from cooker.mcd import actions, client
-from cooker.mcd.config import McdSettings
-from cooker.mcd.ledger import Ledger
+from cooker.connectors import actions, client
+from cooker.connectors.base import ConnectorError, Credentials
+from cooker.connectors.ledger import Ledger
+from cooker.mcd.connector import CONNECTOR as MCD
 from cooker.skills import available, read_skill_file
 from test_agent import ScriptedModel, call
 
@@ -97,8 +98,8 @@ class FakeMcd:
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
     f = FakeMcd()
-    monkeypatch.setattr(client, "open_transport", lambda settings: f.server())
-    monkeypatch.setattr(client, "load_settings", lambda: McdSettings(token=TOKEN))
+    monkeypatch.setattr(client, "open_transport", lambda conn, creds: f.server())
+    monkeypatch.setattr(client, "load_credentials", lambda conn: Credentials(conn.url, TOKEN))
     monkeypatch.setattr(actions, "Ledger", lambda: Ledger(tmp_path / "ledger.sqlite3"))
     monkeypatch.setattr(verify_mod, "_library", lambda: ({}, ()))  # 本文件不测菜名校验
     return f
@@ -190,23 +191,23 @@ def test_read_tool_goes_through_mcp(make_graph, fake):
 
 
 def test_live_schema_validation_rejects_bad_args(fake):
-    with pytest.raises(client.McdError, match="参数不符合"):
-        asyncio.run(client.call("calculate-price", {"storeCode": "1"}))
+    with pytest.raises(ConnectorError, match="参数不符合"):
+        asyncio.run(client.call(MCD, "calculate-price", {"storeCode": "1"}))
     assert fake.calls == []  # 校验失败不会发出请求
 
 
 def test_write_tool_cannot_be_called_as_read(fake):
-    with pytest.raises(client.McdError, match="白名单"):
-        asyncio.run(client.call("draw-lottery"))
+    with pytest.raises(ConnectorError, match="白名单"):
+        asyncio.run(client.call(MCD, "draw-lottery"))
 
 
 def test_token_in_result_is_scrubbed(fake):
-    out = asyncio.run(client.call("query-order", {"orderId": "o1"}))
+    out = asyncio.run(client.call(MCD, "query-order", {"orderId": "o1"}))
     assert TOKEN not in json.dumps(out) and "[凭据已隐藏]" in json.dumps(out, ensure_ascii=False)
 
 
 def test_price_is_converted_from_fen_by_code(fake):
-    text = client.for_model("calculate-price", asyncio.run(client.call(
+    text = client.for_model(MCD, "calculate-price", asyncio.run(client.call(MCD, 
         "calculate-price", {"storeCode": "s1", "orderType": 1, "beType": 1, "items": []})))
     assert '"price":"21.00"' in text
 
@@ -223,7 +224,7 @@ def draw_until_card(make_graph, extra=()):
 
 def test_draw_requires_confirmation_then_executes_once(make_graph, fake):
     g, _, card = draw_until_card(make_graph, [AIMessage("中了下单立减1元券")])
-    assert card["type"] == "mcd_confirm" and ("本次消耗", "本次将消耗 24 积分") in [tuple(r) for r in card["rows"]]
+    assert card["type"] == "action_confirm" and card["connector"] == "mcd" and ("本次消耗", "本次将消耗 24 积分") in [tuple(r) for r in card["rows"]]
     assert "draw-lottery" not in fake.names()  # 只做了只读预检
 
     state = run(g, Command(resume={"confirmed": True, "fingerprint": card["fingerprint"]}))
@@ -232,7 +233,7 @@ def test_draw_requires_confirmation_then_executes_once(make_graph, fake):
     assert fake.names().count("draw-lottery") == 1
 
     # 同一 tool_call_id 再执行（模拟崩溃后重放）：台账返回记录，不再发请求
-    again = json.loads(asyncio.run(actions.run_write("draw-lottery", {}, "d1")))
+    again = json.loads(asyncio.run(actions.run_write(MCD, "draw-lottery", {}, "d1")))
     assert "不会重复提交" in again["message"]
     assert fake.names().count("draw-lottery") == 1
 
@@ -269,13 +270,13 @@ def test_unknown_result_freezes_further_writes(make_graph, fake, monkeypatch, tm
     assert json.loads(last_tool(state))["status"] == "UNKNOWN"
 
     # 冻结期间：其它写操作直接拒绝，连确认卡都不弹
-    frozen = json.loads(asyncio.run(actions.run_write("auto-bind-coupons", {}, "b1")))
+    frozen = json.loads(asyncio.run(actions.run_write(MCD, "auto-bind-coupons", {}, "b1")))
     assert frozen["status"] == "FROZEN" and "auto-bind-coupons" not in fake.names()
 
     # 人工核实后解冻
     assert Ledger(tmp_path / "ledger.sqlite3").resolve("d1", "FAILED", "App 无记录")
     monkeypatch.setattr(actions, "interrupt", lambda value: {"confirmed": False})  # 图外调用：替身代替用户点取消
-    resumed = json.loads(asyncio.run(actions.run_write("auto-bind-coupons", {}, "b2")))
+    resumed = json.loads(asyncio.run(actions.run_write(MCD, "auto-bind-coupons", {}, "b2")))
     assert resumed["status"] == "CANCELLED"  # 走到了确认环节，说明已解冻
 
 
@@ -290,7 +291,7 @@ def test_order_card_uses_live_price_and_checks_take_way(make_graph, fake):
     state = run(g, Command(resume={"confirmed": True, "fingerprint": card["fingerprint"]}))
     assert "payH5Url" in last_tool(state) and fake.names().count("create-order") == 1
 
-    bad = json.loads(asyncio.run(actions.run_write("create-order", {**args, "takeWayCode": "drone"}, "o2")))
+    bad = json.loads(asyncio.run(actions.run_write(MCD, "create-order", {**args, "takeWayCode": "drone"}, "o2")))
     assert bad["status"] == "REFUSED"
 
 

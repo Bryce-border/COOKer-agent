@@ -1,4 +1,4 @@
-# 开发记录 2026-10-31：麦当劳技能重新接入（P4）、聊天中显示菜品图片
+# 开发记录 2026-10-31：麦当劳技能重新接入（P4）、聊天中显示菜品图片、瑞幸接入
 
 更新：2026-10-31。旧版实现归档在分支 `archive/mcd-v1`，不合入 main。
 逐步实现讲解见 `learning/02-麦当劳技能接入-逐步实现.md`；设计结论见 [技术决策](technical-decisions.md) TD-21、TD-22。
@@ -18,7 +18,7 @@
 |---|---|
 | `skills/mclottery-alchemist/` | 原样复制 SKILL.md、references/、LICENSE；来源与 commit 记录在 `skills/README.md` |
 | `src/cooker/skills.py` | 技能发现、索引、`load_skill`（更新状态 `skills`）、`read_skill_file`（白名单） |
-| `src/cooker/mcd/` | `config.py` 密钥与官方端点；`client.py` 调用、白名单、结构校验、错误分级、分→元；`tool_schemas.json` 36 个工具快照；`tools.py` 生成 LangChain 工具；`actions.py` 确认卡与写操作；`ledger.py` 台账与解冻命令；`host_adapter.md` 宿主适配 |
+| `src/cooker/mcd/` | （同日接入瑞幸时，通用部分已移到 `src/cooker/connectors/`，见本文末节）`config.py` 密钥与官方端点；`client.py` 调用、白名单、结构校验、错误分级、分→元；`tool_schemas.json` 36 个工具快照；`tools.py` 生成 LangChain 工具；`actions.py` 确认卡与写操作；`ledger.py` 台账与解冻命令；`host_adapter.md` 宿主适配 |
 | `src/cooker/agent/` | `graph.py` 新增 `AgentState.skills`，按已加载技能绑定工具；`prompts.py` 技能索引与正文；`verify.py` 麦当劳轮次跳过无括号菜名扫描；`cli.py` 终端确认卡 |
 | `scripts/sync_mcd_tools.py` | 只调 `list_tools` 更新快照，提示未分类工具 |
 | `web/` | `components/cooker/mcd-confirm.tsx` 确认卡；`ai.tsx` 接线；`lib/cooker.ts` 工具中文标签；`scripts/verify-mcd-confirm.mjs` 浏览器回归 |
@@ -100,3 +100,54 @@ pytest 82 通过；前端 tsc、eslint 通过；浏览器回归通过；真实�
 ## 局限
 
 封面靠文件名猜，`1.jpg` 类命名无法判断；没有缩略图（原图中位数约 211 KB）。
+
+---
+
+# 瑞幸咖啡（my-coffee 技能）接入
+
+逐步讲解见 `learning/04-瑞幸技能接入-逐步实现.md`；设计结论见 [技术决策](technical-decisions.md) TD-24。
+
+## 解决的问题
+
+聊天中可以点瑞幸：找门店 → 选商品与规格 → 系统确认卡（实时预览价格、优惠券）→ 生成支付二维码；也可以查订单、取消订单。只支持到店自取（技能约束）。
+
+## 改动清单
+
+| 位置 | 内容 |
+|---|---|
+| `src/cooker/connectors/` | **新增通用层**：base（Connector、凭据）、client、actions、ledger、tools，由原 `mcd/` 提取 |
+| `src/cooker/mcd/connector.py` | 麦当劳只剩白名单、7 张确认卡、分→元；删除 mcd 的 client / actions / tools / config |
+| `src/cooker/luckin/` | 瑞幸连接器（2 个写工具、6 个读工具）、`tool_schemas.json`、`host_adapter.md` |
+| `skills/my-coffee/` | 原样复制 SKILL.md、LICENSE（CC BY-ND 4.0）、CHANGELOG、manifest |
+| `config/luckin-mcp.example.env` | 配置模板；真实 Token 在 `luckin-mcp.local.env`（`.gitignore` 改为忽略 `/config/*.local.env`） |
+| `scripts/sync_mcp_tools.py` | 原 `sync_mcd_tools.py`，按参数同步任一服务；去掉瑞幸结构里的私有字段 `returnDirect` |
+| `src/cooker/skills.py`、`agent/verify.py`、`agent/cli.py` | 技能工具来自连接器注册表；中断类型改为 `action_confirm` |
+| `web/` | `mcd-confirm.tsx` → `action-confirm.tsx`（按服务显示图标，「应付」标红）；瑞幸工具中文标签；`verify-mcd-confirm.mjs` → `verify-action-confirm.mjs [mcd|luckin]` |
+| `tests/test_luckin.py` | 10 个离线测试；`test_mcd.py` 改用新接口 |
+| `data/` | 台账 `mcd-ledger.sqlite3` 改名 `connector-ledger.sqlite3`（含 1 条真实记录，原样保留） |
+
+## 遇到的问题
+
+1. **台账里有一条真实 SUCCESS 记录**：11:12:59 的一键领券（成功 3 张），不是自动测试产生的，应为在网页上点了确认。说明写操作链路在真实账户上跑通过一次；改名时原样保留数据。
+2. **瑞幸工具结构有私有字段 `returnDirect`**：不属于 JSON Schema，同步快照时去掉，避免模型接口拒收。
+3. **技能假设宿主有 shell**：curl 调用、IP 定位、Token 落盘到 `~/.my-coffee/` 在 COOKer 中都不适用，写进宿主适配说明覆盖。
+4. **晚上门店全部「打烊中」**：确认卡显示门店状态并提示；因此本次没有尝试真实下单。
+
+## 验证
+
+| 项目 | 结果 |
+|---|---|
+| pytest | 92 通过（新增瑞幸 10 个；麦当劳 17 个改接口后全部通过） |
+| 前端 tsc、eslint | 通过 |
+| 做饭评测 `--repeat 1` | Qwen 12/12、DeepSeek 12/12，无误加载技能 |
+| 真实模型 + 真实瑞幸（只读） | 「人民广场附近点生椰拿铁」→ 加载 my-coffee → 查门店（未展示距离）→ 用户选店 → 查规格 → 调用 createOrder → 确认卡：原价 ¥20.00、减免 ¥0.00、应付 ¥20.00、提示打烊 |
+| 路由 | 「麦当劳积分还有多少」只加载 mclottery-alchemist |
+| 浏览器 `verify-action-confirm.mjs luckin` / `mcd` | 两个场景：确认卡出现 → 取消 → 返回 CANCELLED |
+
+**未验证**：真实下单、支付二维码展示、真实订单查询与取消（需要营业时间、本人在场）；订单详情字段名。
+
+## 下一步（并入 P5）
+
+- 营业时间内本人在场做一次真实下单 → 查单 → 取消（未支付订单），核对订单详情字段与二维码展示。
+- 浏览器定位：前端经用户授权取经纬度传给后端，替代模型对地名的粗略坐标。
+- 技能路由评测加入瑞幸 / 麦当劳易混场景（如「帮我下单」「点一杯」）。

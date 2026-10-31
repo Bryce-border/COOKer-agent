@@ -16,7 +16,9 @@
 | 前端（agent-chat-ui） | ✅ 已接入：流式聊天、菜谱抽屉、购物清单、中断确认、模型切换 | `web/` |
 | 菜谱 HTTP API | ✅ 已实现：详情、本地图片、批量封面（聊天图片卡片） | `src/cooker/api.py` |
 | 技能按需加载 | ✅ 已实现：索引常驻、load_skill 注入正文与工具、read_skill_file（TD-21） | `src/cooker/skills.py`、`skills/` |
-| 麦当劳 MCP 接入 | ✅ 已实现：36 个工具、写操作确认卡 + 台账（TD-22）；真实写操作未在本人账户上执行过 | `src/cooker/mcd/` |
+| 外部 MCP 连接器 | ✅ 已实现：通用的调用、确认卡、台账（TD-22、TD-24） | `src/cooker/connectors/` |
+| 麦当劳接入 | ✅ 已实现：36 个工具；真实账户上执行过一次「一键领券」 | `src/cooker/mcd/` |
+| 瑞幸接入 | ✅ 已实现：8 个工具、下单 / 取消确认卡；真实账户上只验证到确认卡（未下单） | `src/cooker/luckin/` |
 
 当前面向单用户本地运行；聊天、向量与重排使用云端 API。安装和启动以 [README](../README.md) 为准，数据更新与备份见 [使用与维护](usage.md)。
 
@@ -54,16 +56,16 @@ COOKer-agent/
 │   │   ├── prompts.py      系统提示词（动态注入档案）
 │   │   └── cli.py          cooker-chat（SQLite 持久化）
 │   ├── mcp_server/server.py  FastMCP 工具定义（cooker-mcp）
-│   ├── skills.py           技能发现、索引、load_skill / read_skill_file
-│   └── mcd/
-│       ├── config.py       本机密钥（config/mcd-mcp.local.env），只允许官方端点
-│       ├── client.py       MCP 调用：读写白名单、线上结构校验、错误分级、凭据替换、分→元换算
-│       ├── tool_schemas.json  官方工具结构快照（scripts/sync_mcd_tools.py 生成）
-│       ├── tools.py        快照 → LangChain 工具（同步 / 异步入口）
-│       ├── actions.py      写操作：实时建确认卡 → interrupt → 指纹比对 → 台账执行
-│       ├── ledger.py       SQLite 台账（幂等、UNKNOWN 冻结）+ 人工解冻命令
-│       └── host_adapter.md 技能的 COOKer 宿主适配说明
-├── skills/                 原样复制的 Agent Skill（mclottery-alchemist：SKILL.md + references/）
+│   ├── skills.py           技能发现、索引、load_skill / read_skill_file；技能工具来自连接器
+│   ├── connectors/         外部 MCP 服务的通用层（TD-24）
+│   │   ├── base.py         Connector 定义、凭据读取（环境变量 > config/*.local.env，只允许官方端点）、Card / Refuse
+│   │   ├── client.py       MCP 调用：读写白名单、线上结构校验、错误分级、凭据替换
+│   │   ├── actions.py      写操作：实时数据建确认卡 → interrupt → 指纹比对 → 台账执行
+│   │   ├── ledger.py       SQLite 台账 data/connector-ledger.sqlite3（幂等、UNKNOWN 冻结）+ 人工解冻命令
+│   │   └── tools.py        工具结构快照 → LangChain 工具（同步 / 异步入口）
+│   ├── mcd/                麦当劳：connector.py（白名单、7 张确认卡、分→元）、tool_schemas.json、host_adapter.md
+│   └── luckin/             瑞幸：connector.py（2 张确认卡、券码透传、门店坐标）、tool_schemas.json、host_adapter.md
+├── skills/                 原样复制的 Agent Skill：mclottery-alchemist（麦当劳）、my-coffee（瑞幸）
 ├── data/                   生成物（gitignore）：recipes.json / tips.json / ingest_report.json / cache/facts/
 ├── eval/                   检索消融评测、Agent 场景评测
 ├── web/                    Next.js 前端，连接 LangGraph Server

@@ -176,8 +176,8 @@
   references 由 `read_skill_file` 按需读取（白名单，只能读 references/*.md）。
 - **为什么正文放系统提示词**：历史按 12k token 裁剪，正文若作为 ToolMessage 会被很快裁掉；放系统提示词整段会话稳定生效。
 - **为什么不用多 Agent / 路由模型**：同一个 ReAct 循环就能完成路由（模型自己决定是否 load_skill），不增加 LLM 调用；做饭对话零额外工具描述。
-- **技能正文不改**：与宿主的差异（工具改名、无工作台、确认卡由系统生成、【】只给菜名）写在 `src/cooker/mcd/host_adapter.md`，附在正文后，优先级更高。
-- **工具定义来自快照**：`scripts/sync_mcd_tools.py` 只调 `list_tools` 拉官方结构写入 `tool_schemas.json`；绑定时离线、确定，调用前再用线上结构校验一次。
+- **技能正文不改**：与宿主的差异（工具改名、无工作台、确认卡由系统生成、【】只给菜名）写在 `src/cooker/mcd/host_adapter.md`，附在正文后，优先级更高（瑞幸同理：`src/cooker/luckin/host_adapter.md`）。
+- **工具定义来自快照**：`scripts/sync_mcp_tools.py <mcd|luckin>`（原 sync_mcd_tools.py）只调 `list_tools` 拉官方结构写入 `tool_schemas.json`；绑定时离线、确定，调用前再用线上结构校验一次。
   首次同步就发现文档写的 33 个工具与服务端 36 个不一致（`mall-points-products` 已改名 `query-mall-products`，派对工具名不同，新增 3 个），
   硬编码工具名会直接失败。新工具必须手动归入读 / 写白名单才会暴露给模型。
 - **代价（实测字符数）**：做饭提示词 1235 字（含技能索引）；加载后系统提示词约 16.4k 字 + 工具结构约 35k 字，每次模型调用都要付这部分输入 token。
@@ -186,18 +186,18 @@
 
 ## TD-22 麦当劳写操作：确认卡 + 指纹 + 台账（2026-10-31）
 
-- **7 个写工具**（下单、取消、商城兑换、主题活动下单、抽奖、领券、新增地址）统一走 `cooker/mcd/actions.run_write`：
+- **7 个写工具**（下单、取消、商城兑换、主题活动下单、抽奖、领券、新增地址）统一走 `run_write`（接入瑞幸时移到 `cooker/connectors/actions.py`，见 TD-24）：
   1. 台账查 tool_call_id：已执行过 → 返回记录，不重发（崩溃重放、重复恢复的幂等）；
   2. 账户有 IN_FLIGHT / UNKNOWN → 拒绝（FROZEN），不弹卡；
   3. 用快照结构校验参数，**用实时只读查询生成确认卡**：下单前重新 `calculate-price`（分→元由代码换算）并校验 takeWayCode；
      抽奖前重新读 `drawDecision`，`resourceEligible` 不为 true 直接拒绝；取消前查订单状态；
-  4. `interrupt({"type":"mcd_confirm", rows, fingerprint})`，前端渲染确认卡；
+  4. `interrupt({"type":"action_confirm", connector, rows, fingerprint})`（原 `mcd_confirm`），前端渲染确认卡；
   5. 恢复时工具从头重跑、重新建卡；用户带回的指纹与新卡指纹不一致 → CHANGED，不执行；
   6. `BEGIN IMMEDIATE` 事务内认领（检查冻结 + 抽奖 1 秒频控 + 插入 IN_FLIGHT）→ 发请求 → SUCCESS / FAILED / UNKNOWN。
 - **UNKNOWN 的判定**：请求已发出后超时或断连。不能证明没执行，冻结全部写操作；解冻只能本人核实后跑
-  `python -m cooker.mcd.ledger resolve <id> FAILED|SUCCESS --note ...`，不做成工具，模型无法自行解冻。
+  `python -m cooker.connectors.ledger resolve <id> FAILED|SUCCESS --note ...`，不做成工具，模型无法自行解冻。
 - **为什么卡片不让模型写**：模型说错的金额会被用户「确认」进去；卡片数据来自代码的实时查询，模型只决定调用哪个工具和参数。
-- **保留旧版的正确决策**：读写白名单、线上结构校验、结果中的 Token 替换、只允许官方端点。旧版 `data/mcd-actions.sqlite3`（表结构不同，0 条执行记录）不再使用，新台账为 `data/mcd-ledger.sqlite3`。
+- **保留旧版的正确决策**：读写白名单、线上结构校验、结果中的 Token 替换、只允许官方端点。旧版 `data/mcd-actions.sqlite3`（表结构不同，0 条执行记录）不再使用，新台账为 `data/connector-ledger.sqlite3`（最初叫 mcd-ledger.sqlite3，接入瑞幸后改名，记录原样保留）。
 - **局限**：台账只防护经过 COOKer 的调用，挡不住手机 App 或其他客户端；商城兑换卡片拿不到商品价格（接口需要 spuId，而下单参数只有 skuId），只展示 SKU、数量和当前积分并提示「以下单返回为准」。
 
 ## TD-23 聊天中的菜品图片：前端按【菜名】取图，不让模型输出图片（2026-10-31）
@@ -207,3 +207,17 @@
 - **封面选择**：HowToCook 多图菜谱常按步骤排列，按文件名打分（成品类字样 > 与菜名一致 > 摆盘 > 原文顺序）；详情接口同样把封面排第一。启发式，不保证全对。
 - **请求控制**：流式输出期间不请求；页面级缓存（含「无图」）+ 请求中去重（single-flight），实测一条回答 1 次请求。
 - **代价**：未生成缩略图，卡片加载原图（中位数约 211 KB）。
+
+## TD-24 外部服务抽象成连接器：接入瑞幸时把麦当劳的流程提为通用层（2026-10-31）
+
+- **背景**：瑞幸（my-coffee 技能）需要的机制与麦当劳完全相同——按需加载技能、白名单 + 结构校验、写操作确认卡、台账。复制一份 mcd 代码会让两处安全逻辑各自演化。
+- **决策**：通用层 `cooker/connectors/`（base / client / actions / ledger / tools）只写一次；每个服务一个包，只提供 `Connector`：
+  官方地址、凭据前缀与文件、读写白名单、**每个写工具一个确认卡函数**（启动时断言全覆盖）、返回值处理 `present`。`all_connectors()` 登记全部服务并断言工具不重名。
+- **卡片可以改写最终参数**（`Card.args`）：瑞幸要求 `previewOrder` 的 `couponCodeList` 原样透传、下单用门店坐标——由代码从预览结果写入，
+  模型漏传或传错都会被覆盖；参数进入指纹，用户确认的就是实际执行的。
+- **台账按「服务 + Token 摘要」隔离**：瑞幸一笔结果未知只冻结瑞幸，不影响麦当劳。
+- **验证**：重构后麦当劳原有 17 个测试不改断言全部通过；新增瑞幸 10 个测试。
+- **技能与宿主冲突的处理**：my-coffee 默认宿主有 shell（curl 调接口、ipinfo.io 按 IP 定位、Token 写入 `~/.my-coffee/`）。
+  COOKer 没有命令行，Token 由宿主配置文件管理，这些规则在 `luckin/host_adapter.md` 中明确覆盖；
+  技能许可证 CC BY-ND 4.0 不允许改动正文，正好与「正文原样、差异写适配说明」的做法一致。
+- **局限**：订单详情字段名尚未用真实订单核对（取消卡按常见字段名尝试，取不到显示「数据缺失」）；位置只能靠用户描述或模型对地名的粗略坐标，未接浏览器定位。

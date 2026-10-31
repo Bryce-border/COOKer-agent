@@ -38,7 +38,7 @@ pnpm dev --hostname 127.0.0.1 --port 3000
 - 工具调用显示中文摘要，展开查看详情；购物清单可勾选。
 - 回答结束后，回答中带图的菜（【菜名】）在下方显示成品图卡片，点击打开菜谱抽屉（`components/cooker/recipe-covers.tsx`）。
 - 过敏原移除请求暂停对话，确认或取消后恢复。
-- 麦当劳写操作（下单、兑换、抽奖、领券等）在对话中显示确认卡（`components/cooker/mcd-confirm.tsx`），确认时把卡片指纹带回后端；后端发现实时信息变化会拒绝执行。
+- 麦当劳、瑞幸写操作（下单、兑换、抽奖、领券、取消等）在对话中显示确认卡（`components/cooker/action-confirm.tsx`），确认时把卡片指纹带回后端；后端发现实时信息变化会拒绝执行。
 - Web 会话默认共享 local 档案；CLI 的偏好保存在另一套存储中。
 
 菜谱抽屉通过 `GET /cooker/recipes?name=...` 直接读取原文，不调用模型；换算按钮会提交聊天消息，因此会调用模型。图片由 `/cooker/images/...` 提供。
@@ -73,7 +73,8 @@ try {
 
 ```powershell
 node scripts/verify-recipe-covers.mjs # 菜品图片卡片，预置会话，不调用模型
-node scripts/verify-mcd-confirm.mjs   # 真实模型 + 麦当劳只读查询，确认卡只点「取消」
+node scripts/verify-action-confirm.mjs mcd     # 真实模型 + 麦当劳只读查询，确认卡只点「取消」
+node scripts/verify-action-confirm.mjs luckin  # 同上，瑞幸下单确认卡
 node scripts/verify-conversations.mjs
 ```
 

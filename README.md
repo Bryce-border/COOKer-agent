@@ -32,7 +32,7 @@
 | 保存偏好 | 我不吃香菜，家里三口人 | 跨会话档案，移除已记录过敏原需确认 |
 | 查询技巧 | 焯水用冷水还是热水？ | 烹饪技巧检索 |
 
-### 麦当劳管家（可选技能）
+### 麦当劳管家、瑞幸咖啡（可选技能）
 
 接入 [mclottery-alchemist](skills/README.md) 技能与麦当劳官方 MCP。聊到麦当劳时 Agent 才加载技能正文和 36 个工具，做饭对话不受影响。
 
@@ -41,7 +41,9 @@
 | 查询 | 我还有多少积分？最近有什么抽奖？ | 只读工具直接调用，抽奖资格以服务端 drawDecision 为准 |
 | 点餐、兑换、抽奖、领券 | 帮我把麦麦省的券都领了 | 对话内弹出确认卡（金额来自实时算价），点确认才执行一次；结果不明自动冻结 |
 
-启用：复制 `config/mcd-mcp.example.env` 为 `config/mcd-mcp.local.env` 并填写官方 Token（只填 Token，不进 Git）。
+| 点瑞幸 | 我在人民广场附近，点一杯生椰拿铁 | [my-coffee](skills/my-coffee/SKILL.md) 技能：找门店 → 选规格 → 确认卡（实时预览价、自动用券）→ 支付二维码；仅到店自取 |
+
+启用：复制 `config/mcd-mcp.example.env` / `config/luckin-mcp.example.env` 为同名 `.local.env` 并填写官方 Token（只填 Token，不进 Git）。
 冻结后的处理见 [问题排查](docs/troubleshooting.md)。COOKer 不代付，支付在官方页面完成。
 
 技术栈：Python 3.12、LangGraph、LangChain、FastMCP、numpy、jieba / rank-bm25；前端使用 Next.js、React 和 LangGraph SDK，基于 agent-chat-ui 改造。
@@ -162,7 +164,7 @@ git -C HowToCook pull --ff-only
 - 用量计算是确定性的，但输入来自 LLM 抽取，应以原文为准。耗时可能是估算值；厨具和厨艺会进入提示词，目前不是硬过滤条件。
 - 回答校验检查菜名与工具结果的关联，不验证全部步骤、数字和描述。流式生成期间可能短暂显示尚未通过校验的草稿。
 - 向量或重排调用失败时可以降级，但启动仍需有效配置和本地数据。
-- 麦当劳台账只防护经过 COOKer 的写操作，不覆盖手机 App 或其他客户端。写操作的自动测试使用内存中的模拟服务；真实账户上只验证过只读查询和「弹卡后取消」。
+- 麦当劳 / 瑞幸台账只防护经过 COOKer 的写操作，不覆盖手机 App 或其他客户端。写操作的自动测试使用内存中的模拟服务；真实账户上麦当劳执行过一次领券，瑞幸只验证到确认卡（未下单）。
 
 ## 测试与评测
 
@@ -176,7 +178,7 @@ $env:PYTHONUTF8 = "1"
 .\.venv\Scripts\python.exe eval/run_agent_eval.py --repeat 3
 ```
 
-浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-recipe-covers.mjs` 检查菜品图片卡片（不调用模型）；`node scripts/verify-mcd-confirm.mjs` 会调用真实模型和麦当劳只读查询，确认卡上只点「取消」。
+浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-recipe-covers.mjs` 检查菜品图片卡片（不调用模型）；`node scripts/verify-action-confirm.mjs mcd|luckin` 会调用真实模型和对应服务的只读查询，确认卡上只点「取消」。
 
 默认 pytest 不调用真实模型，依赖本地菜谱的数据测试在文件缺失时会跳过。`live` 和两个评测脚本调用真实 API，会产生费用。检索评测遇到降级会判定结果无效。
 

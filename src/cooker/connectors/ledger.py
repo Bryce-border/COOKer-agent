@@ -1,4 +1,4 @@
-"""写操作台账（SQLite）：保证「一次确认最多执行一次」，结果未知时冻结。
+"""写操作台账（SQLite，所有连接器共用）：保证「一次确认最多执行一次」，结果未知时冻结。
 
 状态机：
 
@@ -9,11 +9,11 @@
 - 主键是 tool_call_id：LangGraph 从中断恢复时工具会从头重跑，进程崩溃后重放也会再跑一次，
   同一个 tool_call_id 第二次进来只返回已记录的结果，不会再发请求（幂等）。
 - 认领在 BEGIN IMMEDIATE 事务内完成（检查 + 插入是原子的），跨进程、重启、删除聊天记录都有效。
-- 账户下有 IN_FLIGHT / UNKNOWN 记录时拒绝任何新的写操作：结果不明还继续下单 / 抽奖可能重复扣费。
+- 账户（每个连接器的 Token 摘要，不同服务互不影响）下有 IN_FLIGHT / UNKNOWN 记录时拒绝任何新的写操作：结果不明还继续下单 / 抽奖可能重复扣费。
   解冻只能由人在核实后执行命令行，不提供给模型调用。
 
-    .venv/Scripts/python.exe -m cooker.mcd.ledger list
-    .venv/Scripts/python.exe -m cooker.mcd.ledger resolve <id> FAILED --note "App 中无此订单"
+    .venv/Scripts/python.exe -m cooker.connectors.ledger list
+    .venv/Scripts/python.exe -m cooker.connectors.ledger resolve <id> FAILED --note "App 中无此订单"
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class Frozen(RuntimeError):
 
 class Ledger:
     def __init__(self, path: Path | None = None):
-        self.path = path or get_settings().data_dir / "mcd-ledger.sqlite3"  # 旧版工作台用过 mcd-actions.sqlite3，表结构不同
+        self.path = path or get_settings().data_dir / "connector-ledger.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS actions (
@@ -68,7 +68,7 @@ class Ledger:
                                      (account,)).fetchone()
                 if pending:
                     raise Frozen(f"账户有一笔结果未知的操作（{pending['tool']}），已冻结所有写操作。"
-                                 "请先在麦当劳 App 核实，再由本人用台账命令解冻。")
+                                 "请先在官方 App 核实，再由本人用台账命令解冻。")
                 if tool == "draw-lottery" and db.execute(
                         "SELECT 1 FROM actions WHERE account=? AND tool='draw-lottery' AND updated>?",
                         (account, now - DRAW_INTERVAL)).fetchone():
@@ -118,7 +118,7 @@ class Ledger:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="麦当劳写操作台账")
+    ap = argparse.ArgumentParser(description="外部服务写操作台账（麦当劳、瑞幸）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="最近 20 条")
     r = sub.add_parser("resolve", help="核实后结清结果未知的记录")

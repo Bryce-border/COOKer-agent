@@ -136,15 +136,19 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 2024,3000 |
 - **原因**：未设置 `PYTHONUTF8=1` 时，Windows 默认用 GBK 打开文件，`.env` 里有中文注释。
 - **解决**：启动前设置 `$env:PYTHONUTF8 = "1"`（与「控制台中文乱码」同一根因）。
 
-## 麦当劳写操作提示「已冻结所有写操作」
+## 麦当劳 / 瑞幸写操作提示「已冻结所有写操作」
 
 - **原因**：台账中有一笔 IN_FLIGHT / UNKNOWN（请求发出后超时、断连或进程中途退出），无法证明是否已执行。
-- **处理**：先在麦当劳 App 核对订单、积分与中奖记录，再执行：
-  `.venv\Scripts\python.exe -m cooker.mcd.ledger list` 找到记录号，
-  `... -m cooker.mcd.ledger resolve <记录号> FAILED --note "App 中无此订单"`（确认已执行则写 SUCCESS）。
-- **不要**删除 `data/mcd-ledger.sqlite3` 来「解冻」：这会让重复扣费的保护失效。
+- **处理**：先在对应官方 App（麦当劳 / 瑞幸咖啡）核对订单、积分与记录，再执行：
+  `.venv\Scripts\python.exe -m cooker.connectors.ledger list` 找到记录号，
+  `... -m cooker.connectors.ledger resolve <记录号> FAILED --note "App 中无此订单"`（确认已执行则写 SUCCESS）。
+- **不要**删除 `data/connector-ledger.sqlite3` 来「解冻」：这会让重复扣费的保护失效。
 
-## 麦当劳工具报「参数不符合服务端要求」或「服务当前没有提供」
+## 麦当劳 / 瑞幸工具报「参数不符合服务端要求」或「服务当前没有提供」
 
-- 官方服务改了工具结构或名称。运行 `.venv\Scripts\python.exe scripts/sync_mcd_tools.py` 更新快照，
-  按输出把「未分类」的新工具归入 `src/cooker/mcd/client.py` 的 READ_TOOLS / WRITE_TOOLS（有副作用的必须进 WRITE_TOOLS 并在 actions.py 写确认卡）。
+- 官方服务改了工具结构或名称。运行 `.venv\Scripts\python.exe scripts/sync_mcp_tools.py mcd`（瑞幸为 `luckin`）更新快照，
+  按输出把「未分类」的新工具归入对应 `connector.py` 的 READ_TOOLS / WRITE_TOOLS（有副作用的必须进 WRITE_TOOLS 并写确认卡，否则启动时断言失败）。
+
+## 瑞幸提示门店「打烊中」
+
+- 确认卡会显示门店当前状态（来自 `previewOrder.shopInfo.workStatus`）。打烊时仍可能生成订单但无法出杯，建议换营业中的门店或在营业时间下单。

@@ -1,0 +1,277 @@
+[
+ {
+  "name": "cancelOrder",
+  "description": "瑞幸咖啡取消订单",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "orderId": {
+     "type": "string",
+     "description": "订单ID"
+    }
+   },
+   "required": [
+    "orderId"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "createOrder",
+  "description": "瑞幸咖啡创建订单",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "deptId": {
+     "type": "integer",
+     "description": "门店id"
+    },
+    "productList": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "amount": {
+        "type": "integer",
+        "format": "int32"
+       },
+       "productId": {
+        "type": "integer",
+        "format": "int64"
+       },
+       "skuCode": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "amount",
+       "productId",
+       "skuCode"
+      ]
+     },
+     "description": "订单商品列表"
+    },
+    "longitude": {
+     "type": "number",
+     "description": "经度"
+    },
+    "latitude": {
+     "type": "number",
+     "description": "纬度"
+    },
+    "couponCodeList": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "优惠券列表，此参数来自 `previewOrder` 的返回字段 `couponCodeList`"
+    },
+    "remark": {
+     "type": "string",
+     "description": "订单备注"
+    }
+   },
+   "required": [
+    "deptId",
+    "productList",
+    "longitude",
+    "latitude"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "previewOrder",
+  "description": "瑞幸咖啡订单预览",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "deptId": {
+     "type": "integer",
+     "description": "门店ID"
+    },
+    "productList": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "amount": {
+        "type": "integer",
+        "format": "int32"
+       },
+       "productId": {
+        "type": "integer",
+        "format": "int64"
+       },
+       "skuCode": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "amount",
+       "productId",
+       "skuCode"
+      ]
+     },
+     "description": "订单商品列表"
+    }
+   },
+   "required": [
+    "deptId",
+    "productList"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "queryOrderDetailInfo",
+  "description": "瑞幸咖啡查询订单详情",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "orderId": {
+     "type": "string",
+     "description": "订单ID"
+    }
+   },
+   "required": [
+    "orderId"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "queryProductDetailInfo",
+  "description": "瑞幸咖啡查询商品详情",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "deptId": {
+     "type": "integer",
+     "description": "门店ID"
+    },
+    "productId": {
+     "type": "integer",
+     "description": "商品ID"
+    }
+   },
+   "required": [
+    "deptId",
+    "productId"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "queryShopList",
+  "description": "瑞幸咖啡查询门店列表",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "deptName": {
+     "type": "string",
+     "description": "门店名称"
+    },
+    "longitude": {
+     "type": "number",
+     "description": "经度"
+    },
+    "latitude": {
+     "type": "number",
+     "description": "纬度"
+    }
+   },
+   "required": [
+    "longitude",
+    "latitude"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "searchProductForMcp",
+  "description": "瑞幸咖啡根据用户传入query， 匹配商品推荐结果",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "deptId": {
+     "type": "integer",
+     "description": "门店ID"
+    },
+    "query": {
+     "type": "string",
+     "description": "用户原始查询文本"
+    }
+   },
+   "required": [
+    "deptId",
+    "query"
+   ],
+   "additionalProperties": false
+  }
+ },
+ {
+  "name": "switchProduct",
+  "description": "瑞幸咖啡商品属性切换",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "deptId": {
+     "type": "integer",
+     "description": "门店ID"
+    },
+    "productId": {
+     "type": "integer",
+     "description": "商品ID"
+    },
+    "skuCode": {
+     "type": "string",
+     "description": "商品SKU编码"
+    },
+    "attrOperationParam": {
+     "type": "object",
+     "properties": {
+      "attributeId": {
+       "type": "integer",
+       "format": "int64"
+      },
+      "subAttr": {
+       "type": "object",
+       "properties": {
+        "attributeId": {
+         "type": "integer",
+         "format": "int64"
+        },
+        "operation": {
+         "type": "integer",
+         "format": "int32"
+        }
+       },
+       "required": [
+        "attributeId",
+        "operation"
+       ]
+      }
+     },
+     "required": [
+      "attributeId",
+      "subAttr"
+     ],
+     "description": "商品属性切换参数"
+    },
+    "amount": {
+     "type": "integer",
+     "description": "商品数量"
+    }
+   },
+   "required": [
+    "deptId",
+    "productId",
+    "skuCode",
+    "attrOperationParam",
+    "amount"
+   ],
+   "additionalProperties": false
+  }
+ }
+]

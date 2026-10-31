@@ -56,7 +56,7 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
 
 抽屉中的换算按钮会发送新的聊天消息，由 Agent 调用换算工具；过敏原确认按钮通过 `Command(resume=...)` 恢复同一会话。完整启动步骤见 [README](../README.md)。
 
-## 技能按需加载与麦当劳写操作
+## 技能按需加载与外部服务写操作（麦当劳、瑞幸）
 
 ```
 「我要吃麦当劳」
@@ -67,9 +67,11 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
        → 写工具 run_write：
             台账已有该 tool_call_id？→ 返回记录
             账户冻结？→ FROZEN
-            实时查询建确认卡 → interrupt({"type":"mcd_confirm", rows, fingerprint})
-            前端 McdConfirm：Command(resume={"confirmed", "fingerprint"})
+            实时查询建确认卡 → interrupt({"type":"action_confirm", connector, rows, fingerprint})
+            前端 ActionConfirm：Command(resume={"confirmed", "fingerprint"})
             重跑、重建卡、比对指纹 → 台账认领 → 执行一次 → 结算 SUCCESS / FAILED / UNKNOWN
 ```
 
-结果未知（UNKNOWN）会冻结该账户所有写操作，直到本人用 `python -m cooker.mcd.ledger resolve` 解冻。
+瑞幸同一流程：`load_skill("my-coffee")` 后绑定 8 个工具；`createOrder` 的确认卡由实时 `previewOrder` 生成，券码与门店坐标由代码写进最终参数。
+
+结果未知（UNKNOWN）会冻结该服务账户的所有写操作（麦当劳与瑞幸互不影响），直到本人用 `python -m cooker.connectors.ledger resolve` 解冻。

@@ -51,11 +51,11 @@ def parse_skill_md(text: str) -> tuple[dict, str]:
 
 
 def _extensions() -> dict[str, tuple[str, tuple[BaseTool, ...]]]:
-    """宿主为特定技能提供的适配说明与工具。延迟导入：不用麦当劳技能的场景不加载 MCP 依赖。"""
-    from cooker.mcd.tools import MCD_TOOLS, SKILL_NAME
+    """宿主为特定技能提供的适配说明与工具：每个外部服务连接器对应一个技能。"""
+    from cooker.connectors import all_connectors
+    from cooker.connectors.tools import make_tools
 
-    adapter = (Path(__file__).parent / "mcd" / "host_adapter.md").read_text(encoding="utf-8")
-    return {SKILL_NAME: (adapter, tuple(MCD_TOOLS))}
+    return {c.skill: (c.host_adapter(), tuple(make_tools(c))) for c in all_connectors()}
 
 
 @lru_cache
@@ -102,20 +102,26 @@ def load_skill(name: Annotated[str, Field(description="技能名，取自系统�
         return Command(update={"messages": [ToolMessage(content, tool_call_id=runtime.tool_call_id)]})
     content = (f"已加载技能「{name}」：完整说明已加入系统提示词，按其执行。"
                f"新增 {len(skill.tools)} 个专用工具。可用 read_skill_file 读取的参考模块：{skill.files()}")
-    if skill.tools:
-        content += f"\n账户连接：{_connection_status()}"
+    if conn := _connector_of(name):
+        content += f"\n账户连接：{_connection_status(conn)}"
     return Command(update={"skills": [name],
                            "messages": [ToolMessage(content, tool_call_id=runtime.tool_call_id)]})
 
 
-def _connection_status() -> str:
-    from cooker.mcd.client import McdError, load_settings
+def _connector_of(skill: str):
+    from cooker.connectors import all_connectors
+
+    return next((c for c in all_connectors() if c.skill == skill), None)
+
+
+def _connection_status(conn) -> str:
+    from cooker.connectors.base import ConnectorError
 
     try:
-        load_settings()
+        conn.credentials()
         return "已配置密钥（是否有效以首次查询为准）"
-    except McdError as e:
-        return f"不可用（{e}）。只能做不需要账户的内容（如人格测试、运势），并如实告知用户"
+    except ConnectorError as e:
+        return f"不可用（{e}）。只能做不需要账户的内容，并如实告知用户"
 
 
 @tool
