@@ -25,56 +25,76 @@
   overflow-x: auto;
 }
 
-.markdown-content table {
-  border-collapse: collapse;
-  width: 100%;
-}
+/* ---------- 配图（web/src/lib/inline-images.ts） ---------- */
 
-.markdown-content th,
-.markdown-content td {
-  border: 1px solid #ddd;
-  padding: 8px;
-}
-
-.markdown-content th {
-  background-color: #f2f2f2;
-}
-
-.markdown-content tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-
-/* 配图列表项：左图右文（rehypeInlineImages 给第一次提到某道菜 / 商品的 li 加上 .cooker-media） */
-.markdown-content li.cooker-media {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
+/* 有配图的列表：每项一张卡片，左侧 8rem 图片、右侧正文 */
+.markdown-content .cooker-media-list {
+  margin-left: 0;
   list-style: none;
-  margin: 0.5rem 0 0.5rem -1.25rem;
-  padding: 0.5rem;
-  border-radius: 0.75rem;
-  background: rgba(0, 0, 0, 0.02);
 }
 
-/* 同一列表里没配图的项：同样的卡片样式，文字与有图项的正文左对齐 */
-.markdown-content .cooker-media-list > li:not(.cooker-media) {
-  list-style: none;
-  margin: 0.5rem 0 0.5rem -1.25rem;
-  padding: 0.5rem 0.5rem 0.5rem 7.25rem; /* 6rem 图片 + 0.75rem 间距 + 0.5rem 内边距 */
-  border-radius: 0.75rem;
-  background: rgba(0, 0, 0, 0.02);
+.markdown-content .cooker-media-list > li {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.markdown-content li.cooker-media > .cooker-media-body {
-  flex: 1;
+/* 没有图的项：只占住图片那一列（不画占位块），正文与有图项左对齐，卡片保持紧凑 */
+.markdown-content .cooker-media-list > li:not(.cooker-media)::before {
+  content: "";
+}
+
+.markdown-content .cooker-media-body {
   min-width: 0;
+  line-height: 1.75;
 }
 
-.markdown-content li.cooker-media > .cooker-media-body > p {
+.markdown-content .cooker-media-body > p {
   margin: 0;
 }
 
-/* 表格里的配图：名称与小图同一行 */
-.markdown-content td img[data-inline-image="inline"] {
-  margin-top: -0.15rem;
+.markdown-content .cooker-media-body > p + p {
+  margin-top: 0.25rem;
+}
+
+/* 段落 / 标题下方、列表项末尾的图片行：带名称 */
+.markdown-content .cooker-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.markdown-content .cooker-figure {
+  width: 9rem;
+  margin: 0;
+}
+
+.markdown-content .cooker-figure figcaption {
+  margin-top: 0.25rem;
+  overflow: hidden;
+  color: #4b5563;
+  font-size: 0.75rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 窄屏：卡片图缩小，正文留足宽度 */
+@media (max-width: 640px) {
+  .markdown-content .cooker-media-list > li {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+  .markdown-content .cooker-media-list > li img[data-inline-image="media"] {
+    width: 5.5rem;
+    height: 5.5rem;
+  }
 }

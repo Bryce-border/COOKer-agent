@@ -64,6 +64,12 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   );
 };
 
+const SIZES = {
+  media: "h-32 w-32",
+  figure: "h-36 w-36",
+  cell: "h-16 w-16",
+} as const;
+
 // 图片：rehypeInlineImages 插入的配图（data-inline-image），或回答里本来的 Markdown 图片（如瑞幸支付二维码）
 function MarkdownImage({
   src,
@@ -74,7 +80,7 @@ function MarkdownImage({
   src?: string;
   alt?: string;
   className?: string;
-  "data-inline-image"?: "media" | "inline";
+  "data-inline-image"?: "media" | "figure" | "cell";
   "data-image-kind"?: "recipe" | "product";
   "data-recipe"?: string;
 }) {
@@ -89,7 +95,7 @@ function MarkdownImage({
         alt={alt}
         loading="lazy"
         referrerPolicy="no-referrer"
-        className={cn("my-2 max-h-64 max-w-[16rem] rounded-lg border border-gray-200", className)}
+        className={cn("my-3 max-h-72 max-w-[18rem] rounded-xl border border-gray-200 bg-white p-1", className)}
       />
     );
   }
@@ -103,14 +109,14 @@ function MarkdownImage({
       referrerPolicy="no-referrer" // 外部图床不带本机页面地址
       data-testid="inline-image"
       className={cn(
-        "rounded-lg border border-gray-100",
-        // 列表卡片 96px；表格 / 段落里 56px（原 64px / 28px 看不清）
-        variant === "media" ? "h-24 w-24 shrink-0" : "mr-1.5 inline-block h-14 w-14 align-middle",
+        "rounded-lg",
+        // 页面里直接看得清：列表卡片 128px、段落下方图片行 144px、表格 64px
+        SIZES[variant],
         fit,
       )}
     />
   );
-  const wrap = variant === "media" ? "shrink-0" : "inline align-middle";
+  const wrap = variant === "cell" ? "mr-2 inline-block align-middle" : "block";
   // 菜谱图：点击与菜名按钮一样打开菜谱抽屉
   if (recipe && sheet) {
     return (
@@ -183,19 +189,17 @@ function RecipeAwareLink({
 }
 
 const defaultComponents: any = {
+  // 聊天回答里的标题：比文章标题小一档，层级靠字重与间距区分
   h1: ({ className, ...props }: { className?: string }) => (
     <h1
-      className={cn(
-        "mb-8 scroll-m-20 text-4xl font-extrabold tracking-tight last:mb-0",
-        className,
-      )}
+      className={cn("mt-6 mb-3 text-xl font-bold first:mt-0", className)}
       {...props}
     />
   ),
   h2: ({ className, ...props }: { className?: string }) => (
     <h2
       className={cn(
-        "mt-8 mb-4 scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0 last:mb-0",
+        "mt-6 mb-3 border-l-4 border-orange-400 pl-2.5 text-lg font-semibold first:mt-0",
         className,
       )}
       {...props}
@@ -203,82 +207,83 @@ const defaultComponents: any = {
   ),
   h3: ({ className, ...props }: { className?: string }) => (
     <h3
-      className={cn(
-        "mt-6 mb-4 scroll-m-20 text-2xl font-semibold tracking-tight first:mt-0 last:mb-0",
-        className,
-      )}
+      className={cn("mt-5 mb-2 text-base font-semibold first:mt-0", className)}
       {...props}
     />
   ),
   h4: ({ className, ...props }: { className?: string }) => (
     <h4
-      className={cn(
-        "mt-6 mb-4 scroll-m-20 text-xl font-semibold tracking-tight first:mt-0 last:mb-0",
-        className,
-      )}
+      className={cn("mt-4 mb-2 text-base font-medium text-gray-700 first:mt-0", className)}
       {...props}
     />
   ),
   h5: ({ className, ...props }: { className?: string }) => (
     <h5
-      className={cn(
-        "my-4 text-lg font-semibold first:mt-0 last:mb-0",
-        className,
-      )}
+      className={cn("mt-4 mb-2 font-medium first:mt-0", className)}
       {...props}
     />
   ),
   h6: ({ className, ...props }: { className?: string }) => (
     <h6
-      className={cn("my-4 font-semibold first:mt-0 last:mb-0", className)}
+      className={cn("mt-4 mb-2 font-medium text-gray-600 first:mt-0", className)}
       {...props}
     />
   ),
   p: ({ className, ...props }: { className?: string }) => (
     <p
-      className={cn("mt-5 mb-5 leading-7 first:mt-0 last:mb-0", className)}
+      className={cn("my-3 leading-7 first:mt-0 last:mb-0", className)}
+      {...props}
+    />
+  ),
+  strong: ({ className, ...props }: { className?: string }) => (
+    <strong
+      className={cn("font-semibold text-gray-900", className)}
       {...props}
     />
   ),
   a: RecipeAwareLink,
   img: MarkdownImage,
+  // 引用块多用于提醒（过敏、未核对、待支付等）：浅琥珀底色，不用斜体
   blockquote: ({ className, ...props }: { className?: string }) => (
     <blockquote
-      className={cn("border-l-2 pl-6 italic", className)}
-      {...props}
-    />
-  ),
-  ul: ({ className, ...props }: { className?: string }) => (
-    <ul
-      className={cn("my-5 ml-6 list-disc [&>li]:mt-2", className)}
-      {...props}
-    />
-  ),
-  ol: ({ className, ...props }: { className?: string }) => (
-    <ol
-      className={cn("my-5 ml-6 list-decimal [&>li]:mt-2", className)}
-      {...props}
-    />
-  ),
-  hr: ({ className, ...props }: { className?: string }) => (
-    <hr
-      className={cn("my-5 border-b", className)}
-      {...props}
-    />
-  ),
-  table: ({ className, ...props }: { className?: string }) => (
-    <table
       className={cn(
-        "my-5 w-full border-separate border-spacing-0 overflow-y-auto",
+        "my-4 rounded-r-lg border-l-4 border-amber-300 bg-amber-50 px-4 py-2 text-gray-700 [&>p]:my-1",
         className,
       )}
       {...props}
     />
   ),
+  ul: ({ className, ...props }: { className?: string }) => (
+    <ul
+      className={cn("my-3 ml-5 list-disc marker:text-gray-400 [&>li]:mt-1.5", className)}
+      {...props}
+    />
+  ),
+  ol: ({ className, ...props }: { className?: string }) => (
+    <ol
+      className={cn("my-3 ml-5 list-decimal marker:text-gray-500 [&>li]:mt-1.5", className)}
+      {...props}
+    />
+  ),
+  hr: ({ className, ...props }: { className?: string }) => (
+    <hr
+      className={cn("my-6 border-gray-200", className)}
+      {...props}
+    />
+  ),
+  // 表格包一层可横向滚动的圆角外框：窄屏不撑破页面
+  table: ({ className, ...props }: { className?: string }) => (
+    <div className="my-4 overflow-x-auto rounded-xl border border-gray-200">
+      <table
+        className={cn("w-full border-collapse text-sm", className)}
+        {...props}
+      />
+    </div>
+  ),
   th: ({ className, ...props }: { className?: string }) => (
     <th
       className={cn(
-        "bg-muted px-4 py-2 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right",
+        "border-b border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium whitespace-nowrap text-gray-600 [&[align=center]]:text-center [&[align=right]]:text-right",
         className,
       )}
       {...props}
@@ -287,7 +292,7 @@ const defaultComponents: any = {
   td: ({ className, ...props }: { className?: string }) => (
     <td
       className={cn(
-        "border-b border-l px-4 py-2 text-left last:border-r [&[align=center]]:text-center [&[align=right]]:text-right",
+        "border-b border-gray-100 px-3 py-2.5 align-middle [&[align=center]]:text-center [&[align=right]]:text-right",
         className,
       )}
       {...props}
@@ -295,10 +300,7 @@ const defaultComponents: any = {
   ),
   tr: ({ className, ...props }: { className?: string }) => (
     <tr
-      className={cn(
-        "m-0 border-b p-0 first:border-t [&:last-child>td:first-child]:rounded-bl-lg [&:last-child>td:last-child]:rounded-br-lg",
-        className,
-      )}
+      className={cn("even:bg-gray-50/60 [&:last-child>td]:border-b-0", className)}
       {...props}
     />
   ),

@@ -28,6 +28,8 @@ try {
     const item = page.locator('li.cooker-media', { hasText: c.name });  // 图片和菜名在同一个列表项里
     await expect(item.getByRole('img', { name: c.name })).toBeVisible();
     await expect.poll(() => item.getByRole('img', { name: c.name }).evaluate(el => el.naturalWidth)).toBeGreaterThan(0);
+    const w = (await item.getByRole('img', { name: c.name }).boundingBox())?.width ?? 0;
+    if (w < 120) throw new Error(`列表卡片图太小：${w}px`);  // 页面里直接看得清
   }
   await expect(page.locator('li', { hasText: /^凉拌黄瓜\s*清爽$/ }).getByTestId('inline-image')).toHaveCount(0);
   // 第一个菜没图：这一项不能用左图右文（否则红虾的图看起来像凉拌黄瓜的），红虾小图插在红虾名称前

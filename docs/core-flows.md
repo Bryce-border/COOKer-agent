@@ -52,7 +52,7 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
 
 普通消息由 LangGraph SDK 提交，运行上下文传入模型 provider。菜名引用转为可点击按钮，打开抽屉后通过 `GET /cooker/recipes?name=...` 读取原文，本地图片走 `/cooker/images/...`。这些读取不调用 LLM。
 
-回答流式输出结束后，前端提取【菜名】，用 `GET /cooker/covers?names=...` 批量取封面，插到对应菜名所在的列表项（左图右文）或菜名前（无图的菜跳过，结果在页面内缓存）。
+回答流式输出结束后，前端提取【菜名】，用 `GET /cooker/covers?names=...` 批量取封面，插到对应菜名所在的列表项（卡片左侧大图）、段落下方图片行或表格单元格（无图的菜跳过，结果在页面内缓存）。
 
 抽屉中的换算按钮会发送新的聊天消息，由 Agent 调用换算工具；过敏原确认按钮通过 `Command(resume=...)` 恢复同一会话。完整启动步骤见 [README](../README.md)。
 

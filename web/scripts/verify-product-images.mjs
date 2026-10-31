@@ -44,8 +44,16 @@ try {
   await expect(thumbs.first()).toBeVisible({ timeout: 180000 });
   if (!real) {
     await expect(thumbs).toHaveCount(2);  // 生椰拿铁提到两次只配一张；未提到的商品不显示
-    await expect(page.locator('p', { hasText: '这家店有' }).getByRole('img', { name: '生椰拿铁（原创）' })).toBeVisible();  // 括号后缀省略也能匹配
-    await expect(page.locator('td', { hasText: '橙C美式' }).getByRole('img', { name: '橙C美式' })).toBeVisible();
+    // 段落提到的商品：图片行紧跟在这一段下方（括号后缀省略也能匹配）
+    const fig = page.locator('p:has-text("这家店有") + .cooker-figures').getByRole('img', { name: '生椰拿铁（原创）' });
+    await expect(fig).toBeVisible();
+    const cell = page.locator('td', { hasText: '橙C美式' }).getByRole('img', { name: '橙C美式' });
+    await expect(cell).toBeVisible();
+    // 页面里直接看得清：图片行 ≥ 140px、表格 ≥ 60px
+    for (const [loc, min, what] of [[fig, 140, '段落图片'], [cell, 60, '表格图片']]) {
+      const w = (await loc.boundingBox())?.width ?? 0;
+      if (w < min) throw new Error(`${what}太小：${w}px`);
+    }
   }
   await expect.poll(() => thumbs.first().evaluate(el => el.naturalWidth), { timeout: 30000 }).toBeGreaterThan(0);
   const names = await thumbs.evaluateAll(els => els.map(e => e.getAttribute('alt')));
