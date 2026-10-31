@@ -32,6 +32,18 @@
 | 保存偏好 | 我不吃香菜，家里三口人 | 跨会话档案，移除已记录过敏原需确认 |
 | 查询技巧 | 焯水用冷水还是热水？ | 烹饪技巧检索 |
 
+### 麦当劳管家（可选技能）
+
+接入 [mclottery-alchemist](skills/README.md) 技能与麦当劳官方 MCP。聊到麦当劳时 Agent 才加载技能正文和 36 个工具，做饭对话不受影响。
+
+| 需求 | 示例 | 实现 |
+|---|---|---|
+| 查询 | 我还有多少积分？最近有什么抽奖？ | 只读工具直接调用，抽奖资格以服务端 drawDecision 为准 |
+| 点餐、兑换、抽奖、领券 | 帮我把麦麦省的券都领了 | 对话内弹出确认卡（金额来自实时算价），点确认才执行一次；结果不明自动冻结 |
+
+启用：复制 `config/mcd-mcp.example.env` 为 `config/mcd-mcp.local.env` 并填写官方 Token（只填 Token，不进 Git）。
+冻结后的处理见 [问题排查](docs/troubleshooting.md)。COOKer 不代付，支付在官方页面完成。
+
 技术栈：Python 3.12、LangGraph、LangChain、FastMCP、numpy、jieba / rank-bm25；前端使用 Next.js、React 和 LangGraph SDK，基于 agent-chat-ui 改造。
 
 ## 首次安装（Windows PowerShell）
@@ -91,7 +103,7 @@ NEXT_PUBLIC_ASSISTANT_ID=cooker
 
 打开 [http://localhost:3000](http://localhost:3000)。本地服务不需要 LangSmith API Key。若出现连接表单，填写后端地址和 Graph ID **cooker**；模板默认的 `agent` 不适用于本项目。
 
-点击回答中的菜名打开原文抽屉；右上角切换模型；购物清单可勾选；移除过敏原时确认或取消。使用 Ctrl+C 分别停止两个终端。更多说明见 [前端 README](web/README.md)。本次开发的调用链、设计权衡与面试练习见 [开发与学习记录](docs/development-2026-10-27.md)。
+点击回答中的菜名打开原文抽屉；右上角切换模型；购物清单可勾选；移除过敏原时确认或取消。使用 Ctrl+C 分别停止两个终端。更多说明见 [前端 README](web/README.md)。开发记录见 [对话恢复与删除](docs/development-2026-10-27.md)、[麦当劳技能接入](docs/development-2026-10-31.md)；学习与面试材料在 `learning/`。
 
 ## 终端聊天与 MCP
 
@@ -150,6 +162,7 @@ git -C HowToCook pull --ff-only
 - 用量计算是确定性的，但输入来自 LLM 抽取，应以原文为准。耗时可能是估算值；厨具和厨艺会进入提示词，目前不是硬过滤条件。
 - 回答校验检查菜名与工具结果的关联，不验证全部步骤、数字和描述。流式生成期间可能短暂显示尚未通过校验的草稿。
 - 向量或重排调用失败时可以降级，但启动仍需有效配置和本地数据。
+- 麦当劳台账只防护经过 COOKer 的写操作，不覆盖手机 App 或其他客户端。写操作的自动测试使用内存中的模拟服务；真实账户上只验证过只读查询和「弹卡后取消」。
 
 ## 测试与评测
 
@@ -163,6 +176,8 @@ $env:PYTHONUTF8 = "1"
 .\.venv\Scripts\python.exe eval/run_agent_eval.py --repeat 3
 ```
 
+浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-mcd-confirm.mjs` 会调用真实模型和麦当劳只读查询，确认卡上只点「取消」。
+
 默认 pytest 不调用真实模型，依赖本地菜谱的数据测试在文件缺失时会跳过。`live` 和两个评测脚本调用真实 API，会产生费用。检索评测遇到降级会判定结果无效。
 
 已有记录：31 条检索样本中混合检索加重排 Hit@1 为 1.00；12 个 Agent 场景各重复 3 次，两个模型均曾达到 36/36。这些是自写小样本的检索和工具行为指标，不代表全面的回答准确率。见 [技术决策](docs/technical-decisions.md)。
@@ -175,6 +190,8 @@ $env:PYTHONUTF8 = "1"
 - [技术决策](docs/technical-decisions.md)：选型依据和评测。
 - [问题排查](docs/troubleshooting.md)：启动与模型问题。
 - [前端说明](web/README.md)：Web 操作和开发命令。
+- [开发记录 2026-10-31](docs/development-2026-10-31.md)：麦当劳技能接入的改动、验证与 P5 计划。
+- `learning/`：逐步实现讲解、面试知识点、简历材料（学习用，不是项目说明）。
 
 `src/cooker/` 为后端，`web/` 为前端，`config/` 为模型配置，`tests/` 与 `eval/` 为测试和评测。`HowToCook/` 是独立上游仓库；`data/` 保存生成物及 CLI 会话；`.langgraph_api/` 保存本地开发服务状态，三者不随 Git 提交。
 

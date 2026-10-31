@@ -20,6 +20,7 @@ import {
   ConfirmInterrupt,
   isConfirmInterrupt,
 } from "@/components/cooker/confirm-interrupt";
+import { McdConfirm, isMcdConfirm } from "@/components/cooker/mcd-confirm";
 
 function CustomComponent({
   message,
@@ -89,7 +90,12 @@ function Interrupt({
     : (((interrupt as { value?: unknown } | undefined)?.value ??
         interrupt) as Record<string, any>);
 
-  // COOKer 自己的确认型中断（移除过敏原），优先于通用 JSON 展示
+  // COOKer 自己的确认型中断（移除过敏原 / 麦当劳写操作），优先于通用 JSON 展示
+  if (isMcdConfirm(fallbackValue)) {
+    return isLastMessage || hasNoAIOrToolMessages ? (
+      <McdConfirm value={fallbackValue} />
+    ) : null;
+  }
   if (isConfirmInterrupt(fallbackValue)) {
     return isLastMessage || hasNoAIOrToolMessages ? (
       <ConfirmInterrupt value={fallbackValue} />

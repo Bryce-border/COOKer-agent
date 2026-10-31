@@ -16,6 +16,7 @@ dependencies = [
     "jieba>=0.42",
     "rank-bm25>=0.2.2",
     "fastmcp>=2.12",
+    "jsonschema>=4.0",
     "langgraph>=1.0",
     "langgraph-checkpoint-sqlite>=3.0",
 ]

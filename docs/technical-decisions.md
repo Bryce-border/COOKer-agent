@@ -166,3 +166,36 @@
   路由用同步 `def`（Starlette 放进线程池），避免阻塞 IO 卡住同进程的流式对话。
 - **图片接口的路径穿越防护**：`resolve()` 后用 `is_relative_to(dishes 根)` 判断，越界 / 非图片 / 不存在统一 404；测试覆盖 `..`、URL 编码、绝对路径。
 - **模型切换**存在 URL 查询参数 `?provider=`，经 `context` 传给后端 `Context.provider`（实测 HTTP 传入的 dict 能正确转换为 dataclass）。
+
+## TD-21 麦当劳技能：按需加载（渐进式披露），单图模式（2026-10-31）
+
+- **背景**：旧版接入（归档在分支 `archive/mcd-v1`）把 SKILL.md 复制进仓库却没有代码读取它；13 条手写规则每轮都注入，稀释做饭提示词；
+  写操作在独立的表单工作台页；用正则关键词判断要不要查麦当劳。
+- **做法**：`skills/*/SKILL.md` 原样存放；系统提示词只放 name + description（约 300 字）。模型判断命中后调用 `load_skill`，
+  状态 `skills` 记录已加载技能 → 之后每次调用模型时系统提示词附上 SKILL.md 正文 + 宿主适配说明，并绑定 36 个麦当劳工具；
+  references 由 `read_skill_file` 按需读取（白名单，只能读 references/*.md）。
+- **为什么正文放系统提示词**：历史按 12k token 裁剪，正文若作为 ToolMessage 会被很快裁掉；放系统提示词整段会话稳定生效。
+- **为什么不用多 Agent / 路由模型**：同一个 ReAct 循环就能完成路由（模型自己决定是否 load_skill），不增加 LLM 调用；做饭对话零额外工具描述。
+- **技能正文不改**：与宿主的差异（工具改名、无工作台、确认卡由系统生成、【】只给菜名）写在 `src/cooker/mcd/host_adapter.md`，附在正文后，优先级更高。
+- **工具定义来自快照**：`scripts/sync_mcd_tools.py` 只调 `list_tools` 拉官方结构写入 `tool_schemas.json`；绑定时离线、确定，调用前再用线上结构校验一次。
+  首次同步就发现文档写的 33 个工具与服务端 36 个不一致（`mall-points-products` 已改名 `query-mall-products`，派对工具名不同，新增 3 个），
+  硬编码工具名会直接失败。新工具必须手动归入读 / 写白名单才会暴露给模型。
+- **代价（实测字符数）**：做饭提示词 1235 字（含技能索引）；加载后系统提示词约 16.4k 字 + 工具结构约 35k 字，每次模型调用都要付这部分输入 token。
+  可优化方向：按能力模块分组绑定工具（见 P5 方案）。
+- **局限**：技能加载后整段会话保持激活，用户转回做饭话题时仍带着麦当劳正文与工具。
+
+## TD-22 麦当劳写操作：确认卡 + 指纹 + 台账（2026-10-31）
+
+- **7 个写工具**（下单、取消、商城兑换、主题活动下单、抽奖、领券、新增地址）统一走 `cooker/mcd/actions.run_write`：
+  1. 台账查 tool_call_id：已执行过 → 返回记录，不重发（崩溃重放、重复恢复的幂等）；
+  2. 账户有 IN_FLIGHT / UNKNOWN → 拒绝（FROZEN），不弹卡；
+  3. 用快照结构校验参数，**用实时只读查询生成确认卡**：下单前重新 `calculate-price`（分→元由代码换算）并校验 takeWayCode；
+     抽奖前重新读 `drawDecision`，`resourceEligible` 不为 true 直接拒绝；取消前查订单状态；
+  4. `interrupt({"type":"mcd_confirm", rows, fingerprint})`，前端渲染确认卡；
+  5. 恢复时工具从头重跑、重新建卡；用户带回的指纹与新卡指纹不一致 → CHANGED，不执行；
+  6. `BEGIN IMMEDIATE` 事务内认领（检查冻结 + 抽奖 1 秒频控 + 插入 IN_FLIGHT）→ 发请求 → SUCCESS / FAILED / UNKNOWN。
+- **UNKNOWN 的判定**：请求已发出后超时或断连。不能证明没执行，冻结全部写操作；解冻只能本人核实后跑
+  `python -m cooker.mcd.ledger resolve <id> FAILED|SUCCESS --note ...`，不做成工具，模型无法自行解冻。
+- **为什么卡片不让模型写**：模型说错的金额会被用户「确认」进去；卡片数据来自代码的实时查询，模型只决定调用哪个工具和参数。
+- **保留旧版的正确决策**：读写白名单、线上结构校验、结果中的 Token 替换、只允许官方端点。旧版 `data/mcd-actions.sqlite3`（表结构不同，0 条执行记录）不再使用，新台账为 `data/mcd-ledger.sqlite3`。
+- **局限**：台账只防护经过 COOKer 的调用，挡不住手机 App 或其他客户端；商城兑换卡片拿不到商品价格（接口需要 spuId，而下单参数只有 skuId），只展示 SKU、数量和当前积分并提示「以下单返回为准」。

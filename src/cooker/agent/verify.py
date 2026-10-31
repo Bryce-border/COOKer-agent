@@ -12,6 +12,7 @@ from typing import NamedTuple
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
+from cooker.mcd.client import READ_TOOLS, WRITE_TOOLS
 from cooker.recipes.ingredients import dish_key
 from cooker.recipes.store import get_store
 
@@ -63,7 +64,10 @@ def find_problems(messages: list[BaseMessage]) -> list[Problem]:
             problems.append(Problem(f"【{cited}】不是菜谱库里的菜：删掉它，或去掉【】作为通用举例", False))
         elif real not in tool_text:
             problems.append(Problem(f"【{cited}】没有经过工具查询：先查询再引用，或删掉它", True))
-    # 没加【】但提到了库里的菜：同样必须在对话的工具结果中出现过（追问上一轮查过的菜不需要重查）
+    # 没加【】但提到了库里的菜：同样必须在对话的工具结果中出现过（追问上一轮查过的菜不需要重查）。
+    # 本轮查过麦当劳时跳过：餐品名可能与菜谱名撞车（如「麦辣鸡翅」含库内菜名片段），会误判
+    if any(isinstance(m, ToolMessage) and m.name in READ_TOOLS | WRITE_TOOLS for m in current_turn(messages)):
+        return problems
     unverified = [n for n in scan if n in text and n not in tool_text and f"【{n}】" not in text][:3]
     if unverified:
         problems.append(Problem(f"谈到了未经工具查询的菜谱（{'、'.join(unverified)}）：先调用工具查询", True))

@@ -37,6 +37,7 @@ pnpm dev --hostname 127.0.0.1 --port 3000
 - 历史加载失败时点击「重新加载对话」；加载中及失败时暂停发送，避免向未恢复的会话继续提交。
 - 工具调用显示中文摘要，展开查看详情；购物清单可勾选。
 - 过敏原移除请求暂停对话，确认或取消后恢复。
+- 麦当劳写操作（下单、兑换、抽奖、领券等）在对话中显示确认卡（`components/cooker/mcd-confirm.tsx`），确认时把卡片指纹带回后端；后端发现实时信息变化会拒绝执行。
 - Web 会话默认共享 local 档案；CLI 的偏好保存在另一套存储中。
 
 菜谱抽屉通过 `GET /cooker/recipes?name=...` 直接读取原文，不调用模型；换算按钮会提交聊天消息，因此会调用模型。图片由 `/cooker/images/...` 提供。
@@ -70,6 +71,7 @@ try {
 前后端启动后，使用本机 Edge 执行浏览器回归：
 
 ```powershell
+node scripts/verify-mcd-confirm.mjs   # 真实模型 + 麦当劳只读查询，确认卡只点「取消」
 node scripts/verify-conversations.mjs
 ```
 

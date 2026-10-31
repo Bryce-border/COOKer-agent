@@ -53,3 +53,21 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
 普通消息由 LangGraph SDK 提交，运行上下文传入模型 provider。菜名引用转为可点击按钮，打开抽屉后通过 `GET /cooker/recipes?name=...` 读取原文，本地图片走 `/cooker/images/...`。这些读取不调用 LLM。
 
 抽屉中的换算按钮会发送新的聊天消息，由 Agent 调用换算工具；过敏原确认按钮通过 `Command(resume=...)` 恢复同一会话。完整启动步骤见 [README](../README.md)。
+
+## 技能按需加载与麦当劳写操作
+
+```
+「我要吃麦当劳」
+  agent：系统提示词只有技能索引 → 模型调用 load_skill("mclottery-alchemist")
+  tools：Command(update={"skills": [...]})，状态随 checkpoint 保存
+  agent：系统提示词 += SKILL.md 正文 + 宿主适配；bind_tools 增加 36 个麦当劳工具
+       → 只读工具（账户/抽奖/菜单/算价…）直接经 MCP 调用（每次独立会话 + 线上结构校验）
+       → 写工具 run_write：
+            台账已有该 tool_call_id？→ 返回记录
+            账户冻结？→ FROZEN
+            实时查询建确认卡 → interrupt({"type":"mcd_confirm", rows, fingerprint})
+            前端 McdConfirm：Command(resume={"confirmed", "fingerprint"})
+            重跑、重建卡、比对指纹 → 台账认领 → 执行一次 → 结算 SUCCESS / FAILED / UNKNOWN
+```
+
+结果未知（UNKNOWN）会冻结该账户所有写操作，直到本人用 `python -m cooker.mcd.ledger resolve` 解冻。

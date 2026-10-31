@@ -129,3 +129,22 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 2024,3000 |
 ## Git Bash 下 curl 发送中文 JSON 返回 422
 
 - `curl -d '{"content":"中文"}'` 在 Git Bash 中编码被破坏，服务端报 Invalid JSON。把请求体写入 UTF-8 文件后 `--data-binary @file` 即可。
+
+## langgraph dev 启动报 UnicodeDecodeError: 'gbk'（2026-10-31）
+
+- **现象**：python-dotenv 读 `.env` 时报 `'gbk' codec can't decode`。
+- **原因**：未设置 `PYTHONUTF8=1` 时，Windows 默认用 GBK 打开文件，`.env` 里有中文注释。
+- **解决**：启动前设置 `$env:PYTHONUTF8 = "1"`（与「控制台中文乱码」同一根因）。
+
+## 麦当劳写操作提示「已冻结所有写操作」
+
+- **原因**：台账中有一笔 IN_FLIGHT / UNKNOWN（请求发出后超时、断连或进程中途退出），无法证明是否已执行。
+- **处理**：先在麦当劳 App 核对订单、积分与中奖记录，再执行：
+  `.venv\Scripts\python.exe -m cooker.mcd.ledger list` 找到记录号，
+  `... -m cooker.mcd.ledger resolve <记录号> FAILED --note "App 中无此订单"`（确认已执行则写 SUCCESS）。
+- **不要**删除 `data/mcd-ledger.sqlite3` 来「解冻」：这会让重复扣费的保护失效。
+
+## 麦当劳工具报「参数不符合服务端要求」或「服务当前没有提供」
+
+- 官方服务改了工具结构或名称。运行 `.venv\Scripts\python.exe scripts/sync_mcd_tools.py` 更新快照，
+  按输出把「未分类」的新工具归入 `src/cooker/mcd/client.py` 的 READ_TOOLS / WRITE_TOOLS（有副作用的必须进 WRITE_TOOLS 并在 actions.py 写确认卡）。

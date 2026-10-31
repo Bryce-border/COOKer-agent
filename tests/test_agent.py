@@ -24,6 +24,7 @@ class ScriptedModel(BaseChatModel):
     script: list
     seen: list = []
     forced: list = []
+    skills: list = []
 
     @property
     def _llm_type(self) -> str:
@@ -49,8 +50,9 @@ def env(real_store, monkeypatch):
 
     def make(script):
         model = ScriptedModel(script=list(script), seen=[])
-        model.forced = []
-        def get_model(provider=None, require_tool=False):
+        model.forced, model.skills = [], []
+        def get_model(provider=None, require_tool=False, skills=()):
+            model.skills.append(skills)
             model.forced.append(require_tool)
             return model
         monkeypatch.setattr(graph_mod, "get_agent_model", get_model)
@@ -201,7 +203,7 @@ def test_sqlite_persistence_end_to_end(tmp_path, real_store, monkeypatch):
     script = [call("update_profile", {"add_allergies": ["花生"]}), AIMessage("记住了"),
               call("update_profile", {"remove_allergies": ["花生"]}), AIMessage("已移除")]
     model = ScriptedModel(script=script, seen=[])
-    monkeypatch.setattr(graph_mod, "get_agent_model", lambda provider=None, require_tool=False: model)
+    monkeypatch.setattr(graph_mod, "get_agent_model", lambda provider=None, require_tool=False, skills=(): model)
 
     db = tmp_path / "agent.db"
     saver, store = SqliteSaver(_connect(db)), SqliteStore(_connect(db, autocommit=True))

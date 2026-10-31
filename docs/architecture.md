@@ -2,7 +2,7 @@
 
 本地部署的个人做饭助手 Agent，数据来自 [HowToCook](https://github.com/Anduin2017/HowToCook)。
 
-## 当前状态（P0–P2 已实现，P3 前端已接入）
+## 当前状态（P0–P3 已实现，P4 技能按需加载已接入）
 
 | 层 | 状态 | 位置 |
 |---|---|---|
@@ -15,6 +15,8 @@
 | LangGraph Agent（ReAct + verify 校验 + 档案记忆 + 人在回路） | ✅ 已实现，已评测（TD-19） | `src/cooker/agent/` |
 | 前端（agent-chat-ui） | ✅ 已接入：流式聊天、菜谱抽屉、购物清单、中断确认、模型切换 | `web/` |
 | 菜谱 HTTP API | ✅ 已实现：详情与本地图片 | `src/cooker/api.py` |
+| 技能按需加载 | ✅ 已实现：索引常驻、load_skill 注入正文与工具、read_skill_file（TD-21） | `src/cooker/skills.py`、`skills/` |
+| 麦当劳 MCP 接入 | ✅ 已实现：36 个工具、写操作确认卡 + 台账（TD-22）；真实写操作未在本人账户上执行过 | `src/cooker/mcd/` |
 
 当前面向单用户本地运行；聊天、向量与重排使用云端 API。安装和启动以 [README](../README.md) 为准，数据更新与备份见 [使用与维护](usage.md)。
 
@@ -51,7 +53,17 @@ COOKer-agent/
 │   │   ├── profile.py      用户档案（LangGraph Store）
 │   │   ├── prompts.py      系统提示词（动态注入档案）
 │   │   └── cli.py          cooker-chat（SQLite 持久化）
-│   └── mcp_server/server.py  FastMCP 工具定义（cooker-mcp）
+│   ├── mcp_server/server.py  FastMCP 工具定义（cooker-mcp）
+│   ├── skills.py           技能发现、索引、load_skill / read_skill_file
+│   └── mcd/
+│       ├── config.py       本机密钥（config/mcd-mcp.local.env），只允许官方端点
+│       ├── client.py       MCP 调用：读写白名单、线上结构校验、错误分级、凭据替换、分→元换算
+│       ├── tool_schemas.json  官方工具结构快照（scripts/sync_mcd_tools.py 生成）
+│       ├── tools.py        快照 → LangChain 工具（同步 / 异步入口）
+│       ├── actions.py      写操作：实时建确认卡 → interrupt → 指纹比对 → 台账执行
+│       ├── ledger.py       SQLite 台账（幂等、UNKNOWN 冻结）+ 人工解冻命令
+│       └── host_adapter.md 技能的 COOKer 宿主适配说明
+├── skills/                 原样复制的 Agent Skill（mclottery-alchemist：SKILL.md + references/）
 ├── data/                   生成物（gitignore）：recipes.json / tips.json / ingest_report.json / cache/facts/
 ├── eval/                   检索消融评测、Agent 场景评测
 ├── web/                    Next.js 前端，连接 LangGraph Server

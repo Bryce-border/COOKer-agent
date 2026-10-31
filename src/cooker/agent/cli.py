@@ -68,6 +68,19 @@ def run_turn(graph, payload, config, context: Context, out=sys.stdout) -> list:
     return list(graph.get_state(config).interrupts)
 
 
+def ask(value: dict):
+    """把 interrupt 的内容展示给用户，返回 resume 值。"""
+    if value.get("type") == "mcd_confirm":  # 麦当劳写操作确认卡（cooker.mcd.actions）
+        print(f"\n[{value['title']}]")
+        for label, text in value["rows"]:
+            print(f"  {label}：{text}")
+        for w in value.get("warnings", []):
+            print(f"  ⚠ {w}")
+        yes = input("确认执行？（是/否）> ").strip() in {"是", "确认", "y", "yes"}
+        return {"confirmed": yes, "fingerprint": value["fingerprint"]}
+    return input(f"\n[需要确认] {value.get('question')}（是/否）> ")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="COOKer 终端聊天")
     ap.add_argument("--thread", help="续聊已有会话 ID")
@@ -113,8 +126,7 @@ def main() -> None:
             print("COOKer> ", end="")
             interrupts = run_turn(graph, payload, config, context)
             while interrupts:  # 人在回路：把问题交给用户，用 Command(resume=…) 从断点继续
-                answer = input(f"\n[需要确认] {interrupts[0].value.get('question')}（是/否）> ")
-                interrupts = run_turn(graph, Command(resume=answer), config, context)
+                interrupts = run_turn(graph, Command(resume=ask(interrupts[0].value)), config, context)
         except GraphRecursionError:
             print("\n（本轮步骤过多已中止，请换个说法或拆分问题）")
         except Exception as e:  # 网络 / 接口错误：本轮失败，会话保留

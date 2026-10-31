@@ -18,3 +18,6 @@ HowToCook/
 # 生成的数据与索引（可由 ingest 重新生成；LLM 抽取缓存单独保留可选）
 data/
 .langgraph_api/
+
+# 学习档案里的临时输出（截图、日志、一次性脚本）
+learning/scratch/

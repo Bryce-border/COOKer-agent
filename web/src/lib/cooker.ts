@@ -80,11 +80,53 @@ const TOOL_LABELS: Record<string, { icon: string; label: string; arg?: string }>
   search_cooking_tips: { icon: "💡", label: "查烹饪技巧", arg: "query" },
   update_profile: { icon: "📝", label: "更新偏好" },
   get_profile: { icon: "👤", label: "读取偏好" },
+  load_skill: { icon: "🧩", label: "加载技能", arg: "name" },
+  read_skill_file: { icon: "📄", label: "读取技能文档", arg: "path" },
+};
+
+// 麦当劳 MCP 工具（工具名与官方服务一致，见 src/cooker/mcd/tool_schemas.json）
+const MCD_LABELS: Record<string, string> = {
+  "now-time-info": "当前时间",
+  "query-my-account": "查积分账户",
+  "query-lottery-info": "查抽奖活动",
+  "query-my-prizes": "查中奖记录",
+  "query-mall-products": "查积分商城",
+  "mall-product-detail": "查商城商品",
+  "mall-gift-products": "查麦有礼",
+  "mall-order-list": "查商城订单",
+  "mall-order-detail": "查商城订单详情",
+  "available-coupons": "查可领券",
+  "query-my-coupons": "查我的卡包",
+  "query-store-coupons": "查门店可用券",
+  "campaign-calendar": "查活动日历",
+  "query-promotions": "查团餐优惠",
+  "query-nearby-stores": "找门店",
+  "delivery-query-stores": "找外送门店",
+  "delivery-query-addresses": "查收货地址",
+  "query-meals": "看菜单",
+  "query-meal-detail": "看餐品详情",
+  "query-meal-assistance": "查团餐助餐",
+  "calculate-price": "算价",
+  "order-list": "查订单列表",
+  "query-order": "查订单",
+  "query-survey-coupon": "查满意度奖券",
+  "list-nutrition-foods": "查营养",
+  "query-party-city": "查活动城市",
+  "query-party-store": "查活动门店",
+  "query-party-store-date": "查活动日期",
+  "query-party-store-session": "查活动场次",
+  "create-order": "下单（需确认）",
+  "cancel-order": "取消订单（需确认）",
+  "mall-create-order": "积分兑换（需确认）",
+  "party-order-create": "主题活动预约（需确认）",
+  "draw-lottery": "抽奖（需确认）",
+  "auto-bind-coupons": "一键领券（需确认）",
+  "delivery-create-address": "新增地址（需确认）",
 };
 
 export function describeToolCall(name: string, args: Record<string, unknown>): string {
   const meta = TOOL_LABELS[name];
-  if (!meta) return `🔧 ${name}`;
+  if (!meta) return MCD_LABELS[name] ? `🍟 ${MCD_LABELS[name]}` : `🔧 ${name}`;
   let detail = "";
   if (meta.arg && args[meta.arg] !== undefined) {
     const v = args[meta.arg];

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cooker.agent.profile import UserProfile
+from cooker.skills import active_prompt, index_prompt
 
 SYSTEM_TEMPLATE = """你是 COOKer，一个本地运行的家常菜做饭助手。你的知识来自 HowToCook 菜谱库（372 道菜）和烹饪技巧文章，通过工具查询。
 
@@ -20,6 +21,11 @@ SYSTEM_TEMPLATE = """你是 COOKer，一个本地运行的家常菜做饭助手�
 6. **安全提醒**：过敏原与忌口由工具自动排除。工具返回 profile_warning 时，回答开头就要醒目提醒；
    涉及过敏时提醒用户核对原料表（过敏原由规则推导，可能遗漏）。
 7. 信息不足时（如不知道几个人吃）先问，不要猜。多个互不依赖的查询可以在一次回复中并行调用。
+8. **技能**：请求超出做饭范围、且命中下方「可用技能」的描述时，先调用 load_skill 加载该技能，再按技能说明执行；
+   没有对应技能就说明这超出了你的能力，不要凭记忆回答。
+
+## 可用技能
+{skills}
 
 ## 回答风格
 - 中文，简洁，使用 Markdown。介绍做法时按「原料用量 → 步骤 → 小贴士」组织，步骤用有序列表。
@@ -30,5 +36,8 @@ SYSTEM_TEMPLATE = """你是 COOKer，一个本地运行的家常菜做饭助手�
 """
 
 
-def build_system_prompt(profile: UserProfile) -> str:
-    return SYSTEM_TEMPLATE.format(profile=profile.describe())
+def build_system_prompt(profile: UserProfile, skills: list[str] | None = None) -> str:
+    prompt = SYSTEM_TEMPLATE.format(profile=profile.describe(), skills=index_prompt())
+    if skills:
+        prompt += "\n\n" + active_prompt(skills)
+    return prompt
