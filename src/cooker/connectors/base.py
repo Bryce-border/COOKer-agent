@@ -35,6 +35,7 @@ class Card:
     title: str
     rows: list[tuple[str, str]]
     warnings: list[str] = field(default_factory=list)
+    images: list[dict] = field(default_factory=list)  # 商品缩略图 [{name, url}]，不参与指纹
     facts: Any = None  # 参与指纹的实时数据（价格、消耗、订单状态）
     args: dict | None = None  # 实际执行用的参数；None 表示原样使用模型给的参数（见瑞幸的券码透传）
 
@@ -81,6 +82,7 @@ class Connector:
     write_tools: frozenset[str]
     cards: dict[str, CardBuilder]  # 每个写工具一个确认卡生成函数（必须覆盖全部写工具）
     app_hint: str  # 结果未知时让用户去哪里核实，如「麦当劳 App」
+    image_hosts: frozenset[str] = frozenset()  # 允许在界面显示的官方图床域名（含子域名）
     business_error: Callable[[Any], str | None] = default_business_error
     # 交给模型前的服务特有处理（单位换算、去掉不该展示的字段），返回新的 payload
     present: Callable[[str, Any], Any] = keep

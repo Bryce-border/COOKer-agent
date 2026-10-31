@@ -108,6 +108,39 @@ export async function fetchCovers(
     .filter((c): c is RecipeCover => !!c);
 }
 
+// 外部服务（麦当劳、瑞幸）工具结果里的商品图：后端放在 ToolMessage.artifact.images（模型看不到，见 connectors/images.py）
+export interface ProductImage {
+  name: string;
+  url: string;
+}
+
+type AnyMessage = { id?: string; type: string; artifact?: unknown };
+
+// verify 节点插入的校验反馈是 id 以此开头的隐藏用户消息（见 agent/verify.py），不算一轮的开始
+const HIDDEN_PREFIX = "do-not-render-";
+
+/** 本轮（上一条真实用户消息之后）所有工具结果附带的商品图，按名称去重。 */
+export function turnImages(messages: AnyMessage[], messageId?: string): ProductImage[] {
+  const end = messages.findIndex((m) => m.id === messageId);
+  if (end < 0) return [];
+  const seen = new Map<string, ProductImage>();
+  for (let i = end - 1; i >= 0; i--) {
+    if (messages[i].type === "human" && !String(messages[i].id ?? "").startsWith(HIDDEN_PREFIX)) break;
+    const images = (messages[i].artifact as { images?: ProductImage[] } | undefined)?.images;
+    if (messages[i].type !== "tool" || !Array.isArray(images)) continue;
+    for (const img of images) if (!seen.has(img.name)) seen.set(img.name, img);
+  }
+  return [...seen.values()];
+}
+
+/** 只保留回答里提到的商品。名称后缀括号常被省略（「生椰拿铁（原创）」→「生椰拿铁」），两种写法都算。 */
+export function mentionedImages(text: string, images: ProductImage[]): ProductImage[] {
+  return images.filter((img) => {
+    const base = img.name.replace(/[（(][^）)]*[）)]\s*$/, "").trim();
+    return text.includes(img.name) || (base.length >= 2 && text.includes(base));
+  });
+}
+
 export function imageUrl(apiUrl: string, src: string): string {
   return src.startsWith("http") ? src : `${apiUrl}${src}`;
 }

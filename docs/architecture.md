@@ -62,7 +62,8 @@ COOKer-agent/
 │   │   ├── client.py       MCP 调用：读写白名单、线上结构校验、错误分级、凭据替换
 │   │   ├── actions.py      写操作：实时数据建确认卡 → interrupt → 指纹比对 → 台账执行
 │   │   ├── ledger.py       SQLite 台账 data/connector-ledger.sqlite3（幂等、UNKNOWN 冻结）+ 人工解冻命令
-│   │   └── tools.py        工具结构快照 → LangChain 工具（同步 / 异步入口）
+│   │   ├── images.py       商品图：从返回提取（官方图床白名单）放 artifact，给模型的文本删掉图片字段
+│   │   └── tools.py        工具结构快照 → LangChain 工具（同步 / 异步入口，content + artifact）
 │   ├── mcd/                麦当劳：connector.py（白名单、7 张确认卡、分→元）、tool_schemas.json、host_adapter.md
 │   └── luckin/             瑞幸：connector.py（2 张确认卡、券码透传、门店坐标）、tool_schemas.json、host_adapter.md
 ├── skills/                 原样复制的 Agent Skill：mclottery-alchemist（麦当劳）、my-coffee（瑞幸）

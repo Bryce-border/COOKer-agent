@@ -25,6 +25,7 @@ import {
   isActionConfirm,
 } from "@/components/cooker/action-confirm";
 import { RecipeCovers } from "@/components/cooker/recipe-covers";
+import { ProductImages } from "@/components/cooker/product-images";
 
 function CustomComponent({
   message,
@@ -189,6 +190,13 @@ export function AssistantMessage({
             )}
             {contentString.length > 0 && (
               <RecipeCovers
+                text={contentString}
+                enabled={!(isLoading && isLastMessage)}
+              />
+            )}
+            {contentString.length > 0 && (
+              <ProductImages
+                messageId={message?.id}
                 text={contentString}
                 enabled={!(isLoading && isLastMessage)}
               />

@@ -14,6 +14,7 @@ export interface ActionConfirmValue {
   title: string;
   rows: [string, string][];
   warnings: string[];
+  images?: { name: string; url: string }[]; // 商品缩略图（瑞幸下单卡），地址已过后端域名白名单
   fingerprint: string;
 }
 
@@ -57,6 +58,20 @@ export function ActionConfirm({ value }: { value: ActionConfirmValue }) {
         <span aria-hidden>{ICONS[value.connector] ?? "⚠️"}</span>
         {value.title}
       </div>
+      {value.images && value.images.length > 0 && (
+        <div className="flex gap-2 px-4 pt-3">
+          {value.images.slice(0, 4).map((img) => (
+            <img
+              key={img.url}
+              src={img.url}
+              alt={img.name}
+              title={img.name}
+              referrerPolicy="no-referrer"
+              className="h-16 w-16 rounded-md border border-gray-100 bg-gray-50 object-contain"
+            />
+          ))}
+        </div>
+      )}
       <dl className="divide-y divide-gray-100 px-4 text-sm">
         {value.rows.map(([label, text]) => (
           <div

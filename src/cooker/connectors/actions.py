@@ -70,7 +70,7 @@ async def run_write(conn: Connector, name: str, args: dict, call_id: str) -> str
 
     fp = fingerprint(conn, name, final_args, card)
     answer = interrupt({"type": "action_confirm", "connector": conn.key, "tool": name, "title": card.title,
-                        "rows": card.rows, "warnings": card.warnings, "fingerprint": fp})
+                        "rows": card.rows, "warnings": card.warnings, "images": card.images, "fingerprint": fp})
     if not (isinstance(answer, dict) and answer.get("confirmed") is True):
         return _out("CANCELLED", "用户取消：什么都没执行，金额和积分没有变动")
     if answer.get("fingerprint") != fp:

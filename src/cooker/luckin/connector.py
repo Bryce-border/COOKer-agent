@@ -16,6 +16,7 @@ from typing import Any
 
 from cooker.connectors.actions import read
 from cooker.connectors.base import Card, Connector, Refuse
+from cooker.connectors.images import extract_images
 
 WRITE_TOOLS = frozenset({"createOrder", "cancelOrder"})
 # switchProduct 只是按属性换算出新的 SKU，previewOrder 只预览不建单，都没有副作用
@@ -71,7 +72,8 @@ async def _create_order(conn: Connector, a: dict) -> Card:
         warnings.append("优惠券已按预览结果使用（与对话中传入的不同）")
     facts = {k: preview.get(k) for k in ("totalInitialPrice", "privilegeMoney", "discountPrice")}
     facts.update(coupons=coupons, items=sorted(map(_line_key, items)), status=status)
-    return Card("确认瑞幸下单", rows, warnings, facts=facts, args=final)
+    images = extract_images(items, conn.image_hosts)  # 预览里的商品缩略图 breviaryPicUrl
+    return Card("确认瑞幸下单", rows, warnings, facts=facts, args=final, images=images)
 
 
 def _pick(d: dict, *keys: str) -> Any:
@@ -110,6 +112,7 @@ CONNECTOR = Connector(
     key="luckin", label="瑞幸", skill="my-coffee", url="https://gwmcp.lkcoffee.com/order/user/mcp",
     env_prefix="LUCKIN_MCP_", env_file="config/luckin-mcp.local.env", package_dir=Path(__file__).parent,
     read_tools=READ_TOOLS, write_tools=WRITE_TOOLS, app_hint="瑞幸咖啡 App",
+    image_hosts=frozenset({"luckincoffeecdn.com"}),
     cards={"createOrder": _create_order, "cancelOrder": _cancel_order},
     present=present,
 )

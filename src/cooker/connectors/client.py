@@ -21,6 +21,7 @@ from fastmcp.client.transports import StreamableHttpTransport
 from jsonschema import ValidationError, validate
 
 from cooker.connectors.base import Connector, ConnectorError, Credentials, Unknown
+from cooker.connectors.images import strip_images
 
 CALL_TIMEOUT = 40  # 秒：整次调用（含建连与初始化）的上限
 MAX_RESULT_CHARS = 16_000  # 单次结果交给模型的上限；菜单、营养表可能很长
@@ -115,8 +116,8 @@ def _scrub(payload: Any, token: str) -> Any:
 
 
 def for_model(conn: Connector, name: str, payload: Any) -> str:
-    """把结果整理成交给模型的文本：服务特有处理（如单位换算），再限制长度。"""
-    payload = conn.present(name, payload)
+    """把结果整理成交给模型的文本：服务特有处理（如单位换算）、去掉图片地址（界面另行展示），再限制长度。"""
+    payload = strip_images(conn.present(name, payload))
     text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     if len(text) > MAX_RESULT_CHARS:
         text = text[:MAX_RESULT_CHARS] + f"…（结果过长，已截断，原长 {len(text)} 字符；需要时缩小查询范围）"

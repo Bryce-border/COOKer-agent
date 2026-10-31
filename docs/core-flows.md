@@ -74,4 +74,6 @@ CLI 使用 `data/agent.db`；本地 LangGraph Server 使用其开发运行时管
 
 瑞幸同一流程：`load_skill("my-coffee")` 后绑定 8 个工具；`createOrder` 的确认卡由实时 `previewOrder` 生成，券码与门店坐标由代码写进最终参数。
 
+外部服务的读工具返回 `(content, artifact)`：content（已删去图片地址）给模型，artifact 里的商品图 `[{name, url}]` 由前端在回答下方显示（只显示回答中提到的商品）。
+
 结果未知（UNKNOWN）会冻结该服务账户的所有写操作（麦当劳与瑞幸互不影响），直到本人用 `python -m cooker.connectors.ledger resolve` 解冻。

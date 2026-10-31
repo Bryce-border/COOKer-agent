@@ -42,6 +42,7 @@
 | 点餐、兑换、抽奖、领券 | 帮我把麦麦省的券都领了 | 对话内弹出确认卡（金额来自实时算价），点确认才执行一次；结果不明自动冻结 |
 
 | 点瑞幸 | 我在人民广场附近，点一杯生椰拿铁 | [my-coffee](skills/my-coffee/SKILL.md) 技能：找门店 → 选规格 → 确认卡（实时预览价、自动用券）→ 支付二维码；仅到店自取 |
+| 商品图 | 这家店有生椰拿铁吗？ / 麦当劳抽奖有哪些奖品？ | 回答中提到的商品在下方显示官方商品图，确认卡带缩略图；图片地址不经过模型 |
 
 启用：复制 `config/mcd-mcp.example.env` / `config/luckin-mcp.example.env` 为同名 `.local.env` 并填写官方 Token（只填 Token，不进 Git）。
 冻结后的处理见 [问题排查](docs/troubleshooting.md)。COOKer 不代付，支付在官方页面完成。
@@ -105,7 +106,7 @@ NEXT_PUBLIC_ASSISTANT_ID=cooker
 
 打开 [http://localhost:3000](http://localhost:3000)。本地服务不需要 LangSmith API Key。若出现连接表单，填写后端地址和 Graph ID **cooker**；模板默认的 `agent` 不适用于本项目。
 
-点击回答中的菜名打开原文抽屉；右上角切换模型；购物清单可勾选；移除过敏原时确认或取消。使用 Ctrl+C 分别停止两个终端。更多说明见 [前端 README](web/README.md)。开发记录见 [对话恢复与删除](docs/development-2026-10-27.md)、[麦当劳技能接入](docs/development-2026-10-31.md)；学习与面试材料在 `learning/`。
+点击回答中的菜名打开原文抽屉；右上角切换模型；购物清单可勾选；移除过敏原时确认或取消。使用 Ctrl+C 分别停止两个终端。更多说明见 [前端 README](web/README.md)。开发记录见 [对话恢复与删除](docs/development-2026-10-27.md)、[麦当劳 / 瑞幸接入](docs/development-2026-10-31.md)、[商品图](docs/development-2026-11-01.md)；学习与面试材料在 `learning/`。
 
 ## 终端聊天与 MCP
 
@@ -178,7 +179,7 @@ $env:PYTHONUTF8 = "1"
 .\.venv\Scripts\python.exe eval/run_agent_eval.py --repeat 3
 ```
 
-浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-recipe-covers.mjs` 检查菜品图片卡片（不调用模型）；`node scripts/verify-action-confirm.mjs mcd|luckin` 会调用真实模型和对应服务的只读查询，确认卡上只点「取消」。
+浏览器回归（需先启动前后端）：`web` 目录下 `node scripts/verify-conversations.mjs`；`node scripts/verify-recipe-covers.mjs` 检查菜品图片卡片（不调用模型）；`node scripts/verify-product-images.mjs` 检查外部服务商品图（默认不调用模型）；`node scripts/verify-action-confirm.mjs mcd|luckin` 会调用真实模型和对应服务的只读查询，确认卡上只点「取消」。
 
 默认 pytest 不调用真实模型，依赖本地菜谱的数据测试在文件缺失时会跳过。`live` 和两个评测脚本调用真实 API，会产生费用。检索评测遇到降级会判定结果无效。
 
@@ -192,7 +193,8 @@ $env:PYTHONUTF8 = "1"
 - [技术决策](docs/technical-decisions.md)：选型依据和评测。
 - [问题排查](docs/troubleshooting.md)：启动与模型问题。
 - [前端说明](web/README.md)：Web 操作和开发命令。
-- [开发记录 2026-10-31](docs/development-2026-10-31.md)：麦当劳技能接入的改动、验证与 P5 计划。
+- [开发记录 2026-10-31](docs/development-2026-10-31.md)：麦当劳 / 瑞幸接入、菜品图片的改动、验证与 P5 计划。
+- [开发记录 2026-11-01](docs/development-2026-11-01.md)：麦当劳 / 瑞幸商品图。
 - `learning/`：逐步实现讲解、面试知识点、简历材料（学习用，不是项目说明）。
 
 `src/cooker/` 为后端，`web/` 为前端，`config/` 为模型配置，`tests/` 与 `eval/` 为测试和评测。`HowToCook/` 是独立上游仓库；`data/` 保存生成物及 CLI 会话；`.langgraph_api/` 保存本地开发服务状态，三者不随 Git 提交。

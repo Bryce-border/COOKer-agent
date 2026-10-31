@@ -158,6 +158,7 @@ CONNECTOR = Connector(
     key="mcd", label="麦当劳", skill="mclottery-alchemist", url="https://mcp.mcd.cn",
     env_prefix="MCD_MCP_", env_file="config/mcd-mcp.local.env", package_dir=Path(__file__).parent,
     read_tools=READ_TOOLS, write_tools=WRITE_TOOLS, app_hint="麦当劳 App",
+    image_hosts=frozenset({"mcd.cn"}),  # img.mcd.cn（券、奖品）、menu-img.mcd.cn（菜单）
     cards={"create-order": _create_order, "cancel-order": _cancel_order, "draw-lottery": _draw_lottery,
            "mall-create-order": _mall_create_order, "party-order-create": _party_order,
            "auto-bind-coupons": _auto_bind, "delivery-create-address": _create_address},

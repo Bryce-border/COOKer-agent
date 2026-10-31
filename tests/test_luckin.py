@@ -32,10 +32,12 @@ SHOP = {"deptId": 390217, "deptName": "上海来福士广场店", "address": "�
         "longitude": 121.476095, "latitude": 31.232526, "workTimeStart": "07:30", "workTimeEnd": "21:30",
         "workStatus": "营业中"}
 LINE = {"amount": 1, "productId": 1262, "skuCode": "SP2077-01134"}
+PIC = "https://img06.luckincoffeecdn.com/group5/M00/B2/CF/demo.png"
 PREVIEW = {"code": 0, "msg": "success", "success": True, "data": {
     "discountPrice": 16.0, "privilegeMoney": 4.0, "totalInitialPrice": 20.0, "couponCodeList": ["CPN-1"],
     "shopInfo": SHOP,
-    "productInfoList": [{**LINE, "name": "生椰拿铁（原创）", "additionDesc": "大杯/冰/意式拼配/默认浓度/不另外加糖/无奶油"}]}}
+    "productInfoList": [{**LINE, "name": "生椰拿铁（原创）", "breviaryPicUrl": PIC,
+                         "additionDesc": "大杯/冰/意式拼配/默认浓度/不另外加糖/无奶油"}]}}
 CREATED = {"code": 0, "msg": "success", "success": True, "data": {
     "orderId": "LK123", "discountPrice": 16.0,
     "payOrderQrCodeUrl": "https://pay.example/qr/LK123.png", "payOrderUrl": "https://pay.example/h5/LK123"}}
@@ -55,6 +57,13 @@ class FakeLuckin:
         def shops(longitude: float, latitude: float, deptName: str | None = None) -> dict:
             self.calls.append(("queryShopList", {"longitude": longitude}))
             return {"code": 0, "msg": "success", "success": True, "data": [SHOP]}
+
+        @mcp.tool(name="searchProductForMcp")
+        def search(deptId: int, query: str) -> dict:
+            self.calls.append(("searchProductForMcp", {"query": query}))
+            return {"code": 0, "success": True, "data": [
+                {**LINE, "productName": "生椰拿铁（原创）", "pictureUrl": PIC, "estimatePrice": 20.0},
+                {"productId": 9, "skuCode": "X", "productName": "外链商品", "pictureUrl": "https://tracker.example/p.gif"}]}
 
         @mcp.tool(name="previewOrder")
         def preview(deptId: int, productList: list[dict]) -> dict:
@@ -208,3 +217,20 @@ def test_freeze_is_per_connector(fake, tmp_path):
     frozen = json.loads(asyncio.run(actions.run_write(LUCKIN, "cancelOrder", {"orderId": "LK1"}, "x2")))
     assert frozen["status"] == "FROZEN"
     assert ledger.pending(client.account_key(MCD, Credentials(MCD.url, TOKEN))) is None
+
+
+def test_product_images_go_to_artifact_not_to_model(make_graph, fake):
+    g, model = make_graph([LOAD, call("searchProductForMcp", {"deptId": 390217, "query": "生椰拿铁"}, "p1"),
+                           AIMessage("有**生椰拿铁（原创）**")])
+    state = run(g, "来福士店有生椰拿铁吗")
+    msg = [m for m in state["messages"] if isinstance(m, ToolMessage)][-1]
+    assert msg.artifact == {"images": [{"name": "生椰拿铁（原创）", "url": PIC}]}  # 外链商品被白名单挡掉
+    # 发给模型的就是 ToolMessage.content；artifact 不会被转成模型输入
+    from langchain_core.messages import convert_to_openai_messages
+    sent = convert_to_openai_messages(model.seen[-1])
+    assert "tracker.example" not in json.dumps(sent) and all("artifact" not in m for m in sent)
+
+
+def test_order_card_shows_product_thumbnail(make_graph, fake):
+    _, card = order_card(make_graph)
+    assert card["images"] == [{"name": "生椰拿铁（原创）", "url": PIC}]
