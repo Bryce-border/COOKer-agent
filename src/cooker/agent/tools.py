@@ -2,6 +2,8 @@
 
 与 MCP 工具的区别：这里能通过 ToolRuntime 读到当前用户档案，并把
 「过敏原 / 忌口」强制合并到每次检索条件中——安全约束由代码保证，而不是靠模型记得传参。
+档案按人记录（本人 + 家人）：检索类工具的 for_people 指明「这次谁吃」，只合并这些人的限制；
+不填只按本人。查看单道菜时则对档案里所有人做冲突提醒（安全兜底）。
 工具返回 dict（ToolNode 会用 ensure_ascii=False 序列化成 JSON），出错时返回可读的错误说明，
 让模型据此修正参数或如实告知用户，而不是让整个图崩溃。
 """
@@ -17,7 +19,7 @@ from langgraph.prebuilt import ToolRuntime
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
-from cooker.agent.profile import UserProfile, load_profile, save_profile
+from cooker.agent.profile import SELF, PersonPrefs, UserProfile, load_profile, normalize_person, save_profile
 from cooker.ingest.schema import Allergen
 from cooker.recipes.ingredients import matches
 from cooker.recipes.store import RecipeFilter, RecipeNotFound
@@ -55,16 +57,26 @@ def _safe(fn):
     return wrapper
 
 
-def _filter(profile: UserProfile, **kw: Any) -> tuple[RecipeFilter, dict]:
-    """合并档案约束。返回 (过滤条件, 本次自动应用的约束)，后者回传给模型以便在回答中说明。"""
-    allergens = list(dict.fromkeys([*profile.allergies, *(kw.pop("exclude_allergens", None) or [])]))
-    dislikes = list(dict.fromkeys([*profile.dislikes, *(kw.pop("exclude_ingredients", None) or [])]))
-    if profile.vegetarian and kw.get("vegetarian") is None:
+def _filter(profile: UserProfile, people: list[str] | None = None, **kw: Any) -> tuple[RecipeFilter, dict]:
+    """合并「这次谁吃」的档案约束。返回 (过滤条件, 本次自动应用的约束)，后者按人回传给模型以便在回答中说明。
+
+    素食：一起吃的人里有人吃素就只推荐素菜（做一道大家都能吃的菜）。
+    """
+    diners, unknown = profile.resolve_diners(people)
+    prefs = [profile.person(n) for n in diners]
+    allergens = list(dict.fromkeys([*(a for p in prefs for a in p.allergies), *(kw.pop("exclude_allergens", None) or [])]))
+    dislikes = list(dict.fromkeys([*(d for p in prefs for d in p.dislikes), *(kw.pop("exclude_ingredients", None) or [])]))
+    if any(p.vegetarian for p in prefs) and kw.get("vegetarian") is None:
         kw["vegetarian"] = True
     flt = RecipeFilter(exclude_allergens=allergens, exclude_ingredients=dislikes,
                        **{k: v for k, v in kw.items() if v is not None})
-    applied = {k: v for k, v in {"排除过敏原": profile.allergies, "排除忌口": profile.dislikes,
-                                  "仅素食": profile.vegetarian}.items() if v}
+    applied: dict[str, Any] = {"一起吃的人": diners}
+    for name, pf in zip(diners, prefs):
+        rules = {k: v for k, v in {"排除过敏原": pf.allergies, "排除忌口": pf.dislikes, "仅素食": pf.vegetarian}.items() if v}
+        if rules:
+            applied[name] = rules
+    if unknown:
+        applied["档案中没有记录"] = unknown
     return flt, applied
 
 
@@ -74,6 +86,12 @@ def _dump(items) -> list[dict]:
 
 Categories = Annotated[
     list[str] | None, Field(description="分类：素菜 荤菜 水产 早餐 主食 半成品加工 汤与粥 饮料 酱料和其它材料 甜品")
+]
+
+People = Annotated[
+    list[str] | None,
+    Field(description="这次一起吃的人：档案里的称呼，如 [\"本人\", \"妹妹\"]；[\"全家\"] 表示档案里所有人。"
+                      "不填只按用户本人的偏好过滤。用户说「给妹妹做」「我和妈妈吃」「全家吃」时必须填写"),
 ]
 
 
@@ -86,13 +104,14 @@ def search_recipes(
     max_difficulty: Annotated[int | None, Field(ge=1, le=5)] = None,
     max_calories: int | None = None,
     exclude_ingredients: Annotated[list[str] | None, Field(description="本次额外排除的食材")] = None,
+    for_people: People = None,
     limit: Annotated[int, Field(ge=1, le=8)] = 5,
 ) -> dict:
-    """按描述搜索菜谱（用于推荐、找相似的菜、确认库里有没有某道菜）。用户的过敏原与忌口会被自动排除，
+    """按描述搜索菜谱（用于推荐、找相似的菜、确认库里有没有某道菜）。一起吃的人（for_people）的过敏原与忌口会被自动排除，
     所以含过敏原的菜不会出现在结果里。
     用户点名问某道菜的做法、用量或能不能吃时，直接用 get_recipe，不要用本工具；
     用户报出手头食材时用 recommend_by_ingredients。"""
-    flt, applied = _filter(_profile(runtime), categories=categories, max_difficulty=max_difficulty,
+    flt, applied = _filter(_profile(runtime), for_people, categories=categories, max_difficulty=max_difficulty,
                            max_calories=max_calories, exclude_ingredients=exclude_ingredients)
     return {"results": _dump(get_service().search_recipes(query, flt, limit)), "auto_applied": applied}
 
@@ -101,17 +120,20 @@ def search_recipes(
 @_safe
 def get_recipe(name: Annotated[str, Field(description="菜名或菜谱 ID")], runtime: ToolRuntime[Context]) -> dict:
     """获取一道菜的完整做法（原料、用量、步骤、附加说明）。用户点名问某道菜时首选本工具，回答做法时以此为准。
-    不受过敏原过滤，若与用户档案冲突会返回 profile_warning。"""
+    不受过敏原过滤；若与档案里任何人的过敏 / 忌口冲突，会按人返回 profile_warning。"""
     detail = get_service().get_recipe(name)
     out = detail.model_dump(mode="json", exclude_none=True)
     profile = _profile(runtime)
-    # 用户点名要某道菜时不拦截，但必须提醒冲突
-    hit_allergens = sorted(set(profile.allergies) & set(detail.summary.allergens))
-    hit_dislikes = [d for d in profile.dislikes if any(matches(d, i) for i in detail.ingredients)]
-    if hit_allergens or hit_dislikes:
-        out["profile_warning"] = (
-            f"注意：这道菜可能含有用户的过敏原 {hit_allergens} / 忌口 {hit_dislikes}，回答时必须明确提醒"
-        )
+    # 用户点名要某道菜时不拦截，但必须提醒冲突；不知道谁吃，所以检查档案里的每个人
+    conflicts = []
+    for name in profile.everyone():
+        pf = profile.person(name)
+        hit_allergens = sorted(set(pf.allergies) & set(detail.summary.allergens))
+        hit_dislikes = [d for d in pf.dislikes if any(matches(d, i) for i in detail.ingredients)]
+        if hit_allergens or hit_dislikes:
+            conflicts.append(f"{'用户本人' if name == SELF else name}：过敏原 {hit_allergens} / 忌口 {hit_dislikes}")
+    if conflicts:
+        out["profile_warning"] = "注意：这道菜可能与以下人的饮食限制冲突，回答时必须按人明确提醒——" + "；".join(conflicts)
     return out
 
 
@@ -122,10 +144,11 @@ def recommend_by_ingredients(
     runtime: ToolRuntime[Context],
     categories: Categories = None,
     max_difficulty: Annotated[int | None, Field(ge=1, le=5)] = None,
+    for_people: People = None,
     limit: Annotated[int, Field(ge=1, le=8)] = 5,
 ) -> dict:
-    """根据手头食材推荐能做的菜，列出缺少的主料和配料（常备调料不算缺少）。过敏原与忌口自动排除。"""
-    flt, applied = _filter(_profile(runtime), categories=categories, max_difficulty=max_difficulty)
+    """根据手头食材推荐能做的菜，列出缺少的主料和配料（常备调料不算缺少）。一起吃的人的过敏原与忌口自动排除。"""
+    flt, applied = _filter(_profile(runtime), for_people, categories=categories, max_difficulty=max_difficulty)
     return {"results": _dump(get_service().recommend(have, flt, limit)), "auto_applied": applied}
 
 
@@ -137,10 +160,11 @@ def browse_recipes(
     max_difficulty: Annotated[int | None, Field(ge=1, le=5)] = None,
     max_time_minutes: Annotated[int | None, Field(description="最长耗时（分钟，预估值）")] = None,
     random_pick: Annotated[bool, Field(description="true 随机挑选，用于「今天吃什么」")] = False,
+    for_people: People = None,
     limit: Annotated[int, Field(ge=1, le=10)] = 5,
 ) -> dict:
-    """按条件筛选菜谱，random_pick=true 时随机抽取。过敏原与忌口自动排除。"""
-    flt, applied = _filter(_profile(runtime), categories=categories, max_difficulty=max_difficulty,
+    """按条件筛选菜谱，random_pick=true 时随机抽取。一起吃的人的过敏原与忌口自动排除。"""
+    flt, applied = _filter(_profile(runtime), for_people, categories=categories, max_difficulty=max_difficulty,
                            max_time_minutes=max_time_minutes)
     return {"results": _dump(get_service().browse(flt, limit, random_pick)), "auto_applied": applied}
 
@@ -190,6 +214,8 @@ def search_cooking_tips(query: Annotated[str, Field(description="烹饪技巧问
 @tool
 def update_profile(
     runtime: ToolRuntime[Context],
+    person: Annotated[str, Field(description="这条偏好属于谁：用户自己填「本人」；家人朋友填称呼，如「妹妹」「妈妈」「儿子」。"
+                                             "「我妹妹不吃芹菜」→ person=妹妹，绝不能记到本人")] = SELF,
     add_allergies: list[Allergen] | None = None,
     remove_allergies: list[Allergen] | None = None,
     add_dislikes: list[str] | None = None,
@@ -199,41 +225,46 @@ def update_profile(
     add_equipment: list[str] | None = None,
     skill: str | None = None,
 ) -> dict:
-    """记录用户长期偏好（跨会话保留）。用户提到过敏、忌口、素食、家里几口人、有什么厨具、厨艺水平时调用。
+    """记录长期偏好（跨会话保留），按人分别记录。用户提到自己或家人的过敏、忌口、素食，以及家里几口人、厨具、厨艺水平时调用。
     过敏原只能取：花生 坚果 乳制品 蛋 海鲜 鱼 大豆 麸质 芝麻；具体食材（如「虾」「香菜」）记为忌口。
-    移除过敏原会先请用户确认。"""
+    household_size / add_equipment / skill 是家里的设定，与 person 无关。移除任何人的过敏原都会先请用户确认。"""
     if runtime.store is None:
         return {"error": "当前运行环境未启用长期记忆，无法保存偏好"}
     ctx = _ctx(runtime)
     profile = load_profile(runtime.store, ctx.user_id)
+    who = normalize_person(person)
+    current = profile.person(who)
 
-    not_in_profile = [a for a in (remove_allergies or []) if a not in profile.allergies]
-    removing = [a for a in (remove_allergies or []) if a in profile.allergies]
+    not_in_profile = [a for a in (remove_allergies or []) if a not in current.allergies]
+    removing = [a for a in (remove_allergies or []) if a in current.allergies]
     if removing:
         # 人在回路：放宽安全约束必须由用户本人确认。
         # interrupt 会暂停整个图并把问题交给前端；恢复时本工具从头重新执行，
         # 所以 interrupt 之前不能有任何写操作（这里只读取了档案）。
-        answer = interrupt({"type": "confirm", "question": f"确认从档案中移除过敏原「{'、'.join(removing)}」吗？"
+        owner = "" if who == SELF else f"{who}的"
+        answer = interrupt({"type": "confirm", "question": f"确认从档案中移除{owner}过敏原「{'、'.join(removing)}」吗？"
                             "移除后推荐将不再排除含这些成分的菜。"})
         confirmed = str(answer).strip().lower() in {"是", "确认", "y", "yes", "true", "1"}
         if not confirmed:
             removing = []
 
+    pf = PersonPrefs(
+        allergies=[a for a in dict.fromkeys([*current.allergies, *(add_allergies or [])]) if a not in removing],
+        dislikes=[d for d in dict.fromkeys([*current.dislikes, *(add_dislikes or [])]) if d not in (remove_dislikes or [])],
+        vegetarian=current.vegetarian if vegetarian is None else vegetarian,
+    )
     p = profile.model_copy(deep=True)
-    p.allergies = [a for a in dict.fromkeys([*p.allergies, *(add_allergies or [])]) if a not in removing]
-    p.dislikes = [d for d in dict.fromkeys([*p.dislikes, *(add_dislikes or [])]) if d not in (remove_dislikes or [])]
+    p.set_person(who, pf)
     p.equipment = list(dict.fromkeys([*p.equipment, *(add_equipment or [])]))
-    if vegetarian is not None:
-        p.vegetarian = vegetarian
     if household_size is not None:
         p.household_size = household_size
     if skill in ("新手", "有经验", "熟练"):
         p.skill = skill
     save_profile(runtime.store, ctx.user_id, p)
-    result: dict[str, Any] = {"saved": True, "profile": p.describe()}
+    result: dict[str, Any] = {"saved": True, "person": who, "profile": p.describe()}
     notes = []
     if not_in_profile:
-        notes.append(f"档案中本来就没有过敏原 {not_in_profile}，无需移除")
+        notes.append(f"{who}的档案中本来就没有过敏原 {not_in_profile}，无需移除")
     if remove_allergies and len(not_in_profile) < len(remove_allergies) and not removing:
         notes.append("用户未确认，过敏原未移除")
     if notes:

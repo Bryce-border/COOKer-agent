@@ -13,7 +13,7 @@ from langgraph.types import Command
 from conftest import build_retriever
 from cooker.agent import graph as graph_mod
 from cooker.agent import tools as tools_mod
-from cooker.agent.profile import UserProfile, load_profile, save_profile
+from cooker.agent.profile import PersonPrefs, UserProfile, load_profile, save_profile
 from cooker.agent.tools import Context
 from cooker.service import CookerService
 
@@ -86,8 +86,24 @@ def test_profile_is_injected_and_enforced(env):
     state = g.invoke({"messages": [HumanMessage("推荐个炒蛋")]}, CFG, context=Context())
     assert "过敏：蛋" in model.seen[0][0].content  # 档案进入系统提示词
     out = tool_results(state)[0]
-    assert out["auto_applied"]["排除过敏原"] == ["蛋"]
+    assert out["auto_applied"]["一起吃的人"] == ["本人"]
+    assert out["auto_applied"]["本人"]["排除过敏原"] == ["蛋"]
     assert out["results"] and all("蛋" not in r["recipe"]["allergens"] for r in out["results"])  # 模型没传也被排除
+
+
+def test_profile_per_person(env):
+    """家人过敏只影响「给她做的菜」：本人不受影响，妹妹的结果里排除含蛋的菜。"""
+    make, store = env
+    save_profile(store, "local", UserProfile(members={"妹妹": PersonPrefs(allergies=["蛋"])}))
+    ask = {"query": "炒蛋", "limit": 8}
+    g, _ = make([call("search_recipes", ask, "c1"),
+                 call("search_recipes", {**ask, "for_people": ["妹妹"]}, "c2"),
+                 AIMessage("ok")])
+    state = g.invoke({"messages": [HumanMessage("给我和妹妹各推荐个炒蛋")]}, CFG, context=Context())
+    mine, sisters = tool_results(state)
+    assert mine["auto_applied"] == {"一起吃的人": ["本人"]}  # 本人的档案里没有限制
+    assert sisters["auto_applied"]["妹妹"]["排除过敏原"] == ["蛋"]
+    assert all("蛋" not in r["recipe"]["allergens"] for r in sisters["results"])
 
 
 def test_get_recipe_warns_on_conflict(env):
