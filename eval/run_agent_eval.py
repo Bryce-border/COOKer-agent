@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
+from cooker.agent import trace
 from cooker.agent.graph import build_graph
 from cooker.agent.profile import UserProfile, load_profile, save_profile
 from cooker.agent.tools import Context
@@ -120,18 +121,26 @@ def run(provider: str | None, show: bool, repeat: int = 1, only: list[str] | Non
                 error = "; ".join(filter(None, [error, *ground]))
             cites = len(set(_CITE_RE.findall(answer)))
             fixes = sum(str(m.id or "").startswith("do-not-render-verify-") for m in state["messages"])
+            usage = trace.summarize(state.get("trace") or [])  # 本场景所有轮次的 token 与实际模型
         except Exception as e:
             error = f"异常 {type(e).__name__}: {str(e)[:150]}"
+        u = locals().get("usage") or {}
         rows.append({"id": sc["id"], "ok": error is None, "reason": error, "cites": locals().get("cites", 0), "fixes": locals().get("fixes", 0),
-                     "tools": [n for n, _ in calls.items_all],
+                     "tools": [n for n, _ in calls.items_all], "usage": u,
                      "seconds": round(time.perf_counter() - t0, 1)})
         print(f"{'✅' if error is None else '❌'} {sc['id']:22} {rows[-1]['seconds']:>5}s fixes={rows[-1]['fixes']} cites={rows[-1]['cites']} tools={rows[-1]['tools']}"
-              + (f"  ← {error}" if error else ""))
+              f" tokens={u.get('input_tokens', 0)}/{u.get('output_tokens', 0)} model={','.join(u.get('models', []))}"
+              + (" ⚠降级" if u.get("fallback") else "") + (f"  ← {error}" if error else ""))
+        usage = None
         if show:
             print("   " + answer[:300].replace("\n", "\n   "))
     passed = sum(r["ok"] for r in rows)
     flaky = sorted({r["id"] for r in rows if not r["ok"]})
     fixed = sum(r["fixes"] > 0 for r in rows)
+    used = sorted({m for r in rows for m in r["usage"].get("models", [])})
+    print(f"[{provider or 'default'}] 实际使用模型：{used}；token 合计 输入 {sum(r['usage'].get('input_tokens', 0) for r in rows):,}"
+          f" / 输出 {sum(r['usage'].get('output_tokens', 0) for r in rows):,}"
+          + ("；⚠ 有场景降级到了备用模型，结果不代表所选厂商" if any(r["usage"].get("fallback") for r in rows) else ""))
     print(f"[{provider or 'default'}] 通过 {passed}/{len(rows)}（{repeat} 次/场景），"
           f"平均 {sum(r['seconds'] for r in rows) / len(rows):.1f}s/次；verify 介入 {fixed} 次；出现失败的场景：{flaky or '无'}")
     return {"provider": provider, "passed": passed, "total": len(rows), "rows": rows}

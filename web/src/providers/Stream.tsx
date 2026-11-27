@@ -30,8 +30,9 @@ import { useThreads } from "./Thread";
 import { toast } from "sonner";
 import { createClient } from "./client";
 import { useConversationHistory } from "@/hooks/use-conversation-history";
+import type { TraceEvent } from "@/lib/trace";
 
-export type StateType = { messages: Message[]; ui?: UIMessage[] };
+export type StateType = { messages: Message[]; ui?: UIMessage[]; trace?: TraceEvent[] };
 
 const useTypedStream = useStream<
   StateType,

@@ -8,12 +8,14 @@
   技能按需加载（skills.py）：状态 skills 记录本会话已加载的技能，决定系统提示词附带哪些技能正文、绑定哪些工具
 - tools 节点：langgraph 预置 ToolNode，并行执行本轮全部 tool_calls，结果作为 ToolMessage 写回
 - verify 节点：检查最终回答的菜名引用是否有工具依据（verify.py），不通过则删掉该回答、附上问题让模型重答
+- trace（trace.py）：三类节点各写一条执行事件（耗时、token、实际模型、是否降级、工具状态、校验结果）
 - 持久化（checkpointer / store）在 compile 时注入：本地 CLI 用 SQLite，LangGraph Server 由平台提供
 """
 
 from __future__ import annotations
 
 import operator
+import time
 import uuid
 from functools import lru_cache
 from typing import Annotated, Literal
@@ -28,9 +30,11 @@ from langgraph.types import Command
 
 from cooker.agent.profile import load_profile
 from cooker.agent.prompts import build_system_prompt
+from cooker.agent import trace
 from cooker.agent.tools import TOOLS, Context
 from cooker.agent.verify import UNVERIFIED_NOTE, correction_message, current_turn, find_problems, is_correction
 from cooker.llm import build_runnable
+from cooker.llm.factory import load_models_config, resolve_provider
 from cooker.skills import SKILL_TOOLS, active_tools, all_skill_tools
 
 # 历史消息的 token 上限（近似计数）。超过时丢弃最早的轮次，且保证从一条用户消息开始，
@@ -46,6 +50,8 @@ def _merge_skills(old: list[str], new: list[str]) -> list[str]:
 class AgentState(MessagesState):
     # 本会话已加载的技能（load_skill 写入，只增不减，随 checkpoint 持久化）
     skills: Annotated[list[str], _merge_skills]
+    # 执行过程事件（trace.py），只追加、保留最近 MAX_EVENTS 条
+    trace: Annotated[list[dict], trace.add_trace]
 
 
 @lru_cache
@@ -82,8 +88,14 @@ def call_model(state: AgentState, runtime: Runtime[Context]) -> dict:
     require_tool = is_correction(last) and bool(last.additional_kwargs.get("require_tool"))
     skills = tuple(state.get("skills") or ())
     model = get_agent_model(ctx.provider, require_tool, skills)
+    started = time.time()
     response = model.invoke([SystemMessage(build_system_prompt(profile, list(skills))), *history])
-    return {"messages": [response]}
+    provider = resolve_provider(ctx.provider)
+    event = trace.model_event(
+        response, turn=trace.turn_id(state["messages"]), started=started, provider=provider,
+        configured=load_models_config().providers[provider].roles.get("agent"),
+        tools_bound=len(TOOLS) + len(SKILL_TOOLS) + len(active_tools(list(skills))), forced=require_tool)
+    return {"messages": [response], "trace": [event]}
 
 
 def route_after_agent(state: MessagesState) -> Literal["tools", "verify"]:
@@ -94,15 +106,17 @@ def route_after_agent(state: MessagesState) -> Literal["tools", "verify"]:
 def verify(state: MessagesState) -> Command[Literal["agent", "__end__"]]:
     messages = state["messages"]
     problems = find_problems(messages)
+    texts = [p.text for p in problems]
     if not problems:
-        return Command(goto=END)
+        return Command(update={"trace": [trace.verify_event(messages, "pass", [])]}, goto=END)
     answer = messages[-1]
     if sum(is_correction(m) for m in current_turn(messages)) >= MAX_CORRECTIONS:
         # 重答次数用尽：保留回答但如实标注（同 id 的消息会被 add_messages 替换）
-        return Command(update={"messages": [AIMessage(id=answer.id, content=answer.content + UNVERIFIED_NOTE)]},
-                       goto=END)
+        return Command(update={"messages": [AIMessage(id=answer.id, content=answer.content + UNVERIFIED_NOTE)],
+                               "trace": [trace.verify_event(messages, "give_up", texts)]}, goto=END)
     return Command(
-        update={"messages": [RemoveMessage(id=answer.id), correction_message(problems, uuid.uuid4().hex[:8])]},
+        update={"messages": [RemoveMessage(id=answer.id), correction_message(problems, uuid.uuid4().hex[:8])],
+                "trace": [trace.verify_event(messages, "retry", texts)]},
         goto="agent",
     )
 
@@ -111,7 +125,8 @@ def build_builder() -> StateGraph:
     builder = StateGraph(AgentState, context_schema=Context)
     builder.add_node("agent", call_model)
     # ToolNode 注册全部工具（执行端）；模型能看到哪些由 get_agent_model 按已加载技能决定（调用端）
-    builder.add_node("tools", ToolNode([*TOOLS, *SKILL_TOOLS, *all_skill_tools()]))
+    builder.add_node("tools", ToolNode([*TOOLS, *SKILL_TOOLS, *all_skill_tools()],
+                                       wrap_tool_call=trace.wrap_tool_call, awrap_tool_call=trace.awrap_tool_call))
     builder.add_node("verify", verify)
     builder.add_edge(START, "agent")
     builder.add_conditional_edges("agent", route_after_agent)

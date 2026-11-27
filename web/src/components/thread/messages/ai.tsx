@@ -25,6 +25,7 @@ import {
   isActionConfirm,
 } from "@/components/cooker/action-confirm";
 import { useRecipeCovers } from "@/components/cooker/recipe-covers";
+import { TracePanel } from "@/components/cooker/trace-panel";
 import { turnImages } from "@/lib/cooker";
 import { useMemo } from "react";
 
@@ -181,6 +182,18 @@ export function AssistantMessage({
     [recipeCovers, products],
   );
 
+  // 执行过程：只挂在一轮的最后一条 AI 回答下面（下一条真实用户消息之前），流式输出结束后显示
+  const traceEvents = useMemo(() => {
+    const msgs = thread.messages;
+    const idx = msgs.findIndex((m) => m.id === message?.id);
+    if (idx < 0 || isToolResult || (isLoading && isLastMessage)) return [];
+    const real = (m: (typeof msgs)[number]) => m.type === "human" && !String(m.id ?? "").startsWith("do-not-render-");
+    const next = msgs.slice(idx + 1).find((m) => m.type === "ai" || real(m));
+    if (next && next.type === "ai") return [];
+    const turn = msgs.slice(0, idx).reverse().find(real)?.id;
+    return (thread.values.trace ?? []).filter((e) => e.turn === turn);
+  }, [thread.messages, thread.values.trace, message?.id, isToolResult, isLoading, isLastMessage]);
+
   if (isToolResult && hideToolCalls) {
     return null;
   }
@@ -232,6 +245,7 @@ export function AssistantMessage({
               isLastMessage={isLastMessage}
               hasNoAIOrToolMessages={hasNoAIOrToolMessages}
             />
+            <TracePanel events={traceEvents} />
             <div
               className={cn(
                 "mr-auto flex items-center gap-2 transition-opacity",

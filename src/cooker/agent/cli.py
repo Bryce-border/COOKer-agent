@@ -22,6 +22,7 @@ from langgraph.errors import GraphRecursionError
 from langgraph.store.sqlite import SqliteStore
 from langgraph.types import Command
 
+from cooker.agent import trace
 from cooker.agent.graph import build_graph
 from cooker.agent.profile import load_profile
 from cooker.agent.tools import Context
@@ -65,7 +66,20 @@ def run_turn(graph, payload, config, context: Context, out=sys.stdout) -> list:
                     elif isinstance(msg, ToolMessage):
                         out.write(f"  ↲ {msg.name}: {_short(msg.content, 80)}\n")
     out.write("\n")
-    return list(graph.get_state(config).interrupts)
+    snapshot = graph.get_state(config)
+    events = snapshot.values.get("trace") or []
+    turn = trace.turn_id(snapshot.values.get("messages") or [])
+    out.write(format_summary(trace.summarize([e for e in events if e.get("turn") == turn])) + "\n")
+    return list(snapshot.interrupts)
+
+
+def format_summary(s: dict) -> str:
+    """本轮执行汇总（trace.py）：耗时、模型调用次数、token、工具次数、实际模型、是否降级。"""
+    line = (f"  ⏱ {s['seconds']}s · 模型 {s['model_calls']} 次 · 输入 {s['input_tokens']:,} / 输出 {s['output_tokens']:,} tokens"
+            f" · 工具 {s['tool_calls']} 次 · {'、'.join(s['models']) or '-'}")
+    if s["retries"]:
+        line += f" · 校验重答 {s['retries']} 次"
+    return line + (" · ⚠ 主模型调用失败，已降级到备用模型" if s["fallback"] else "")
 
 
 def ask(value: dict):
