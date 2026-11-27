@@ -77,9 +77,10 @@ node scripts/verify-product-images.mjs [--real|--real-mcd] # 商品图位置；�
 node scripts/verify-action-confirm.mjs mcd     # 真实模型 + 麦当劳只读查询，确认卡只点「取消」
 node scripts/verify-action-confirm.mjs luckin  # 同上，瑞幸下单确认卡
 node scripts/verify-conversations.mjs
+node scripts/verify-trace.mjs          # 回答下方「执行过程」汇总与展开
 ```
 
-脚本创建并清理临时会话，包含一次真实模型问候请求。覆盖范围与技术讲解见 [开发与学习记录](../docs/development-2026-10-27.md)。
+脚本创建并清理临时会话，包含一次真实模型问候请求。
 
 ## 部署边界
 

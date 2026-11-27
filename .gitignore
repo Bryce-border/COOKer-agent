@@ -19,5 +19,7 @@ HowToCook/
 data/
 .langgraph_api/
 
-# 学习档案里的临时输出（截图、日志、一次性脚本）
-learning/scratch/
+# 学习 / 面试 / 简历材料、开发阶段记录（只留本地，不上传）
+learning/
+docs/development-*.md
+.workbuddy/
