@@ -6,6 +6,23 @@
 
 同时COOKer不一样的地方是提供个人记忆功能，用户可以在不同会话中保持偏好设置和查询记录。他会记住用户的过敏原、偏好和查询记录，根据这些信息推荐合适的菜谱和提醒~
 
+## 作品演示
+
+[![COOKer 演示短片：29 张卡片串起食材、火候与个人记忆](docs/assets/cooker-intro-cover.jpg)](docs/assets/cooker-intro.mp4)
+
+98 秒动画短片，29 张卡片依次走过食材（土豆 / 番茄 / 鸡蛋 / 牛肉…）、火候（焯 / 煮 / 蒸 / 炒 / 煎 / 炸 / 烤）、份量与合并、过敏与忌口、家人偏好和历史记录，最后落在菜谱、麦当劳、瑞幸、终端、MCP 与 Web。点封面播放（1280×720，5.7 MB，仓库内 mp4）。
+
+### 界面截图
+
+#### 菜谱生成
+![对话里按现有食材推荐，点开的菜谱抽屉显示成品图、过敏原提示、原料与用量](docs/assets/demo-recipes.png)
+
+#### 菜谱问答
+![问某道菜的细节，回答给用量、步骤和新手容易失败的地方，末尾按过敏原提醒](docs/assets/demo-qa.png)
+
+#### 个人记忆
+![说「家里 3 个人吃饭」后调用 update_profile，跨会话记住人数与忌口](docs/assets/demo-memory.png)
+
 ## 学习用刀
 
 新增图文教程：[学习用刀](content/tips/learn/学习用刀.md)。包含刀具选择、握刀与护手、蔬菜切片切丝切丁、逆纹切肉、水果处理、交叉污染预防、清洗收纳、磨刀及割伤处理，并配有原创示意图。
@@ -205,11 +222,3 @@ $env:PYTHONUTF8 = "1"
 ## 数据与第三方许可
 
 菜谱来自 HowToCook（Unlicense），不随本仓库分发。前端基于 [agent-chat-ui](https://github.com/langchain-ai/agent-chat-ui)，保留其 MIT 许可，见 [web/LICENSE](web/LICENSE)。
-
-## 作品演示
-### 1. 菜谱生成
-![alt text](image.png)
-### 2. 菜谱问答
-![alt text](image-2.png)
-### 3. 个人记忆
-![alt text](image-1.png)
